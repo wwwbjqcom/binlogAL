@@ -69,10 +69,22 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
     let (packet_buf,header) = socketio::get_packet_from_stream(&mut mysql_conn);
 
     //连接成功停留100秒
-    use std::{thread, time};
-    let ten_millis = time::Duration::from_secs(100);
-    thread::sleep(ten_millis);
+    if check_pack(&packet_buf) {
+        Ok(mysql_conn)
+    } else {
+        Err("connection failed")
+    }
 
+}
 
-    Ok(mysql_conn)
+//检查ok_packet、err_packet
+fn check_pack(pack: &Vec<u8>) -> bool {
+    let pack_type = Some(pack[0]);
+    match pack_type {
+        Some(0) => true,
+        Some(254) => true,
+        Some(255) => false,
+        _ => false
+    }
+
 }

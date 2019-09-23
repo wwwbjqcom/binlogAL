@@ -75,6 +75,10 @@ impl Config{
 pub fn startop(config: &Config) {
     let conn = io::connection::create_mysql_conn(config) ;  //创建连接
 
+    use std::{thread, time};
+    let ten_millis = time::Duration::from_secs(100);
+    thread::sleep(ten_millis);
+
 }
 
 
