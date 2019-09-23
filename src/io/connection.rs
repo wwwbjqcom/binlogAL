@@ -67,8 +67,7 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
     }
 
     let (packet_buf,header) = socketio::get_packet_from_stream(&mut mysql_conn);
-
-    //连接成功停留100秒
+    
     if check_pack(&packet_buf) {
         Ok(mysql_conn)
     } else {
