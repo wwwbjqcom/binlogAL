@@ -94,6 +94,7 @@ pub fn startop(config: &Config) {
         println!("{:?}",row);
     }
 
+
 //    use std::{thread, time};
 //    let ten_millis = time::Duration::from_secs(100);
 //    thread::sleep(ten_millis);

@@ -28,7 +28,7 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
         process::exit(1);
     });
 
-    let (packet_buf,header) = socketio::get_packet_from_stream(&mut mysql_conn);
+    let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
     let handshake = pack::HandshakePacket::new(&packet_buf).unwrap_or_else(|err|{
         println!("{}",err);
         process::exit(1);
@@ -50,7 +50,7 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
     });
 
     //检查服务端回包情况
-    let (packet_buf,header) = socketio::get_packet_from_stream(&mut mysql_conn);
+    let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
     if packet_buf[0] == 0xFE {
         //重新验证密码
         let auth_data = response::authswitchrequest(&handshake, packet_buf.as_ref(), conf);
@@ -60,7 +60,7 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
         });
     }
 
-    let (packet_buf,header) = socketio::get_packet_from_stream(&mut mysql_conn);
+    let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
 
     if pack::check_pack(&packet_buf) {
         Ok(mysql_conn)

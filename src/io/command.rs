@@ -15,12 +15,6 @@ trait ColInit {
     fn new(buf: &Vec<u8>) -> Self;
 }
 
-//COM_Query 包
-struct ComQuery{
-    ctype: u32,
-    command: String,
-}
-
 //查询数据时mysql返回的字段元数据
 #[derive(Debug)]
 struct MetaColumn{
@@ -41,46 +35,46 @@ impl ColInit for MetaColumn{
         let mut offset: usize = 0;
         let mut var_size = buf[0] as usize ; //字段信息所占长度
         offset += 1;
-        let mut catalog = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let catalog = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         var_size = buf[offset] as usize;
         offset += 1;
-        let mut schema = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let schema = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         var_size = buf[offset] as usize;
         offset += 1;
-        let mut table = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let table = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         var_size = buf[offset] as usize;
         offset += 1;
-        let mut org_table = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let org_table = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         var_size = buf[offset] as usize;
         offset += 1;
-        let mut name = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let name = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         var_size = buf[offset] as usize;
         offset += 1;
-        let mut org_name = readvalue::read_string_value(&buf[offset..offset+var_size]);
+        let org_name = readvalue::read_string_value(&buf[offset..offset+var_size]);
         offset += var_size;
 
         offset += 1;
 
-        let mut character_set = readvalue::read_u16(&buf[offset..offset+2]);
+        let character_set = readvalue::read_u16(&buf[offset..offset+2]);
         offset += 2;
 
-        let mut column_length = readvalue::read_u32(&buf[offset..offset+4]);
+        let column_length = readvalue::read_u32(&buf[offset..offset+4]);
         offset += 4;
 
-        let mut column_type = buf[offset];
+        let column_type = buf[offset];
         offset +=1;
 
-        let mut flag = readvalue::read_u16(&buf[offset..offset+2]);
+        let flag = readvalue::read_u16(&buf[offset..offset+2]);
 
         MetaColumn{
             catalog,
@@ -93,15 +87,6 @@ impl ColInit for MetaColumn{
             column_length,
             column_type,
             flag
-        }
-    }
-}
-
-impl ComQuery{
-    fn new(com: &String) -> ComQuery{
-        ComQuery{
-            ctype: 3,
-            command: com.clone()
         }
     }
 }
@@ -149,13 +134,13 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
 
         //开始获取返回数据
         loop {
-            let (buf,header) = socketio::get_packet_from_stream(conn);
+            let (buf,_) = socketio::get_packet_from_stream(conn);
             if buf[0] == 0x00{
                 break;
             }else if buf[0] == 0xfe {
                 break;
             }
-            let values = unpack_text_value(&buf, &column_info,&header.payload);
+            let values = unpack_text_value(&buf, &column_info);
             values_info.push(values);
         }
         Ok(values_info)
@@ -166,7 +151,7 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
     }
 }
 
-fn unpack_text_value(buf: &Vec<u8>,column_info: &Vec<MetaColumn>,payload: &u32) -> HashMap<String,String> {
+fn unpack_text_value(buf: &Vec<u8>,column_info: &Vec<MetaColumn>) -> HashMap<String,String> {
     //解析每行数据
     let mut values_info = HashMap::new();
     let mut offset = 0;
