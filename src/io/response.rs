@@ -4,7 +4,7 @@
 */
 
 use crate::{readvalue, meta};
-use crate::io::socketio::HandshakePacket;
+use crate::io::pack::HandshakePacket;
 use crate::meta::PackType;
 use std::convert::TryInto;
 use std::process;
@@ -125,17 +125,15 @@ impl LocalInfo {
 impl LocalInfo {
 
     pub fn pack_payload(&self, buf: &HandshakePacket, pack_type: &PackType, config: &Config) -> Result<Vec<u8> ,&'static str> {
-        /*
-        组装handshakeresponse包从这里开始，返回一个完整的回包
-        所有数据都放于verctor类型中
-        */
+        //组装handshakeresponse包从这里开始，返回一个完整的回包
+        //所有数据都放于verctor类型中
         let mut _payload = Vec::new();
         let mut payload_value: Vec<u8> = vec![];
         let mut packet_header: Vec<u8> = vec![];
         match pack_type {
             PackType::HandShake => {},
             PackType::HandShakeResponse => unsafe {
-                if config.database > "0".to_string() {
+                if config.database.len() > 0 {
                     payload_value = Self::pack_handshake(&self,buf, config, 1);
                 }else {
                     payload_value = Self::pack_handshake(&self,buf, config, 0) ;
@@ -155,6 +153,7 @@ impl LocalInfo {
     }
 }
 
+//auth_switch需再次验证密码方式
 pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config) -> Vec<u8> {
     let mut packet: Vec<u8> = vec![];
     let mut payload: Vec<u8> = vec![];
@@ -169,7 +168,7 @@ pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config
     }
     let auth_plugin_data = &buf[offset..];
 
-    if auth_plugin_name > String::from(""){
+    if auth_plugin_name.len() > 0 {
         let flags_meta = meta::FlagsMeta::new();
         if handshake.capability_flags & flags_meta.client_plugin_auth as u32 > 0 {
             match scramble::scramble_native(&auth_plugin_data[..20], conf.password.as_bytes()){
@@ -184,8 +183,8 @@ pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config
     return packet;
 }
 
-fn pack_header(buf: &[u8], seq: u8) -> Vec<u8> {
-    //组装heder部分
+//组装heder部分
+pub fn pack_header(buf: &[u8], seq: u8) -> Vec<u8> {
     let mut _header = Vec::new();
     let payload = readvalue::write_u24(buf.len() as u32);
     _header.extend(payload);

@@ -7,3 +7,4 @@ pub mod socketio;
 pub mod response;
 pub mod pack;
 pub mod scramble;
+pub mod command;

@@ -26,6 +26,11 @@ pub fn read_u32(pack: &[u8]) -> u32 {
     rdr.read_u32::<LittleEndian>().unwrap()
 }
 
+pub fn read_u64(pack: &[u8]) -> u64 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_u64::<LittleEndian>().unwrap()
+}
+
 pub fn write_u24(num: u32) -> Vec<u8> {
     let mut rdr = Vec::new();
     rdr.write_u24::<LittleEndian>(num).unwrap();
