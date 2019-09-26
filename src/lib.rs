@@ -6,11 +6,13 @@
 pub mod readvalue;
 pub mod meta;
 pub mod io;
+pub mod replication;
 use std::str;
 use std::process;
 
 
 use structopt::StructOpt;
+use std::fs::OpenOptions;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -29,6 +31,24 @@ pub struct Opt {
 
     #[structopt(short = "c",long = "command", help="sql语句")]
     pub command: Option<String>,
+
+    #[structopt(short = "r",long = "repltype", help="获取binlog模式[repl,file]，也可不设置，用于程序建传递")]
+    pub repltype: Option<String>,
+
+    #[structopt(short = "f",long = "file", help="binlog文件，用于文件读取")]
+    pub file: Option<String>,
+
+    #[structopt(long = "binlogfile", help="binlog文件名，用于replicaton注册同步")]
+    pub binlogfile: Option<String>,
+
+    #[structopt(long = "position", help="注册replication使用的pos")]
+    pub position: Option<String>,
+
+    #[structopt(long = "gtid", help="gtid同步模式使用的gtid")]
+    pub gtid: Option<String>,
+
+    #[structopt(long = "conntype", help="连接操作类型，repl、command 分别对应slave同步和执行sql")]
+    pub conntype: Option<String>,
 }
 
 #[derive(Debug)]
@@ -38,7 +58,13 @@ pub struct Config {
     pub password: String,
     pub database: String,
     pub program_name: String,
-    pub command: String
+    pub command: String,
+    pub repltype: String,
+    pub file: String,
+    pub binlogfile: String,
+    pub position: String,
+    pub gtid: String,
+    pub conntype: String,
 }
 
 impl Config{
@@ -48,6 +74,12 @@ impl Config{
         let mut password = String::from("");
         let mut database = String::from("");
         let mut command = String::from("");
+        let mut repltype= String::from("");
+        let mut file = String::from("");
+        let mut binlogfile = String::from("");
+        let mut position = String::from("");
+        let mut gtid = String::from("");
+        let mut conntype = String::from("");
         match args.user {
             None => {
                 return Err("user 不能为空！！");
@@ -78,7 +110,42 @@ impl Config{
             None => (),
             Some(t) => command = t,
         }
-        Ok(Config { program_name:String::from("rust_test"),host_info, user_name ,password, database,command})
+
+        match args.repltype {
+            None => (),
+            Some(t) => repltype = t,
+        }
+
+        match args.file {
+            None => (),
+            Some(t) => file = t,
+        }
+
+        match args.binlogfile {
+            None => (),
+            Some(t) => binlogfile = t,
+        }
+
+        match args.position {
+            None => (),
+            Some(t) => position = t,
+            _ => {}
+        }
+
+        match args.gtid {
+            None => (),
+            Some(t) => gtid = t,
+        }
+
+        match args.conntype {
+            None => (),
+            Some(t) => conntype = t,
+        }
+
+        Ok(Config { program_name:String::from("rust_test"),
+            host_info, user_name ,
+            password, database,
+            command,repltype,file,binlogfile,position,gtid,conntype})
     }
 }
 
@@ -88,11 +155,18 @@ pub fn startop(config: &Config) {
         process::exit(1);
     }) ;  //创建连接
 
-    //let sql = String::from("show master status");
-    let values = io::command::execute(&mut conn,&config.command);
-    for row in values.iter(){
-        println!("{:?}",row);
+    if config.conntype == String::from("command"){
+        //let sql = String::from("show master status");
+        let values = io::command::execute(&mut conn,&config.command);
+        for row in values.iter(){
+            println!("{:?}",row);
+        }
+    }else if config.conntype == String::from("repl") {
+        replication::repl_register(&mut conn,&config);
+    }else {
+        println!("无效的执行参数conntype: {}, --help提供参考",config.conntype);
     }
+
 
 
 //    use std::{thread, time};

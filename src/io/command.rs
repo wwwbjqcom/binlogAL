@@ -134,7 +134,12 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
 
         //开始获取返回数据
         loop {
-            let (buf,_) = socketio::get_packet_from_stream(conn);
+            let (mut buf,header) = socketio::get_packet_from_stream(conn);
+            while header.payload == 0xffffff{
+                println!("{}",header.payload);
+                let (buf_tmp,header) = socketio::get_packet_from_stream(conn);
+                buf.extend(buf_tmp);
+            }
             if buf[0] == 0x00{
                 break;
             }else if buf[0] == 0xfe {

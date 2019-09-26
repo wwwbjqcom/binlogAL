@@ -25,7 +25,7 @@ impl PacketHeader{
     }
 }
 
-pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader){
+fn get_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader){
     //获取一个数据包
     //定义4个u8的vector接收包头4bytes数据
 
@@ -33,15 +33,17 @@ pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader)
     let mut header: PacketHeader = PacketHeader { payload: 0, seq_id: 0 };
     loop {
         match stream.read_exact(&mut header_buf){
-            Ok(_) => {}
+            Ok(_) => {
+                header = PacketHeader::new(&header_buf);
+                if header.payload > 0 {
+                    break;
+                }
+            }
             Err(_) => {
-                println!("read packet error");
+                //println!("read packet error");
             }
         }
-        header = PacketHeader::new(&header_buf);
-        if header.payload > 0 {
-            break;
-        }
+
     }
 
     //通过包头获取到的payload数据读取实际数据
@@ -55,6 +57,17 @@ pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader)
 
     return (packet_buf,header);
 }
+
+pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader){
+    let (mut buf,header) = get_from_stream(stream);
+    while header.payload == 0xffffff{
+        println!("{}",header.payload);
+        let (buf_tmp,header) = get_from_stream(stream);
+        buf.extend(buf_tmp);
+    }
+    (buf, header)
+}
+
 
 //向连接写入数据
 pub fn write_value(stream: &mut TcpStream, buf: &Vec<u8>) -> Result<(),Box<dyn Error>> {

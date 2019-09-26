@@ -118,6 +118,19 @@ pub fn check_pack(pack: &Vec<u8>) -> bool {
         Some(255) => false,
         _ => true
     }
+}
+/*
+Type	    Name	            Description
+int<1>	    header	            0xFF ERR packet header
+int<2>	    error_code	        error-code
+if capabilities & CLIENT_PROTOCOL_41 {
+string[1]	sql_state_marker	# marker of the SQL state
+string[5]	sql_state	        SQL state
+}
+string<EOF>	error_message	    human readable error message
+*/
 
+pub fn erro_pack(pack: &Vec<u8>) -> String {
+    readvalue::read_string_value(&pack[3..])
 }
 
