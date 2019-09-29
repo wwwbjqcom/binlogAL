@@ -205,10 +205,37 @@ impl RowValue{
                 }
             }
             ColumnTypeDict::MYSQL_TYPE_TIMESTAMP2 => {
-                MySQLValue::Null
+                let whole_part = buf.read_i32::<BigEndian>().unwrap();
+                let frac_part = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
+                MySQLValue::Timestamp { unix_time: whole_part, subsecond: frac_part }
             }
             ColumnTypeDict::MYSQL_TYPE_DATETIME2 => {
-                MySQLValue::Null
+                /*
+                DATETIME
+                1 bit  sign           (1= non-negative, 0= negative)
+                17 bits year*13+month  (year 0-9999, month 0-12)
+                 5 bits day            (0-31)
+                 5 bits hour           (0-23)
+                 6 bits minute         (0-59)
+                 6 bits second         (0-59)
+                ---------------------------
+                40 bits = 5 bytes
+                */
+                let mut tmp_buf = [0u8; 5];
+                buf.read_exact(&mut tmp_buf);
+                let subsecond = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
+                tmp_buf[0] &= 0x7f;
+
+                let year_month: u32 = ((tmp_buf[2] as u32) >> 6) + ((tmp_buf[1] as u32) << 2) + ((tmp_buf[0] as u32) << 10);
+                let year = year_month / 13;
+                let month = year_month % 13;
+
+                let day = ((tmp_buf[2] & 0x3e) as u32) >> 1;
+
+                let hour = (((tmp_buf[3] & 0xf0) as u32) >> 4) + (((tmp_buf[2] & 0x01) as u32) << 4);
+                let minute = (tmp_buf[4] >> 6) as u32 + (((tmp_buf[3] & 0x0f) as u32) << 2);
+                let second = (tmp_buf[4] & 0x3f) as u32;
+                MySQLValue::DateTime { year, month, day, hour, minute, second, subsecond }
             }
             ColumnTypeDict::MYSQL_TYPE_YEAR => {
                 MySQLValue::Year(buf.read_u8().unwrap() as u32 + 1900)
@@ -225,7 +252,24 @@ impl RowValue{
 
             }
             ColumnTypeDict::MYSQL_TYPE_TIME2 => {
-                MySQLValue::Null
+                /*
+                TIME encoding for nonfractional part:
+
+                 1 bit sign    (1= non-negative, 0= negative)
+                 1 bit unused  (reserved for future extensions)
+                10 bits hour   (0-838)
+                 6 bits minute (0-59)
+                 6 bits second (0-59)
+                ---------------------
+                24 bits = 3 bytes
+                */
+                let mut tmp_buf = [0u8; 3];
+                buf.read_exact(&mut tmp_buf);
+                let hours = (((tmp_buf[0] & 0x3f) as u32) << 4) | (((tmp_buf[1] & 0xf0) as u32) >> 4);
+                let minutes = (((tmp_buf[1] & 0x0f) as u32) << 2) | (((tmp_buf[2] & 0xb0) as u32) >> 6);
+                let seconds = (tmp_buf[2] & 0x3f) as u32;
+                let frac_part = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
+                MySQLValue::Time { hours, minutes, seconds, subseconds: frac_part }
             }
             ColumnTypeDict::MYSQL_TYPE_VARCHAR |
             ColumnTypeDict::MYSQL_TYPE_VAR_STRING |
@@ -350,6 +394,17 @@ impl RowValue{
             },
             4 => i64::from(r.read_i32::<BigEndian>()?),
             _ => unimplemented!(),
+        })
+    }
+
+
+    fn read_datetime_fsp<R: Read>(r: &mut R, column: u8) -> io::Result<u32> {
+        Ok(match column {
+            0 => 0u32,
+            1 | 2 => Self::read_int_be_by_size(r, 1)? as u32,
+            3 | 4 => Self::read_int_be_by_size(r, 2)? as u32,
+            5 | 6 => Self::read_int_be_by_size(r, 3)? as u32,
+            _ => 0u32,
         })
     }
 }

@@ -7,6 +7,7 @@ use std::str::from_utf8;
 use std::io::{Cursor, Read};
 use byteorder::{ReadBytesExt, LittleEndian, WriteBytesExt, BigEndian};
 use uuid::Error;
+use std::io;
 
 pub fn read_num_pack<R: Read, S: Into<usize>>(num: S, buf: &mut R) -> Vec<u8> {
     let mut pack = vec![0u8; num.into()];
@@ -122,5 +123,11 @@ pub fn read_f32(pack: &[u8]) -> f32 {
 pub fn read_f64(pack: &[u8]) -> f64 {
     let mut rdr = Cursor::new(pack);
     rdr.read_f64::<LittleEndian>().unwrap()
+}
+
+pub fn read_nbytes<R: Read, S: Into<usize>>(r: &mut R, desired_bytes: S) -> io::Result<Vec<u8>> {
+    let mut into = vec![0u8; desired_bytes.into()];
+    r.read_exact(&mut into)?;
+    Ok(into)
 }
 
