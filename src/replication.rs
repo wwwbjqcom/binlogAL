@@ -7,9 +7,11 @@ use std::net::TcpStream;
 use crate::{replication,Config,readvalue};
 use crate::io::{response,pack,socketio};
 use std::process;
+use std::collections::HashMap;
 
 pub mod readbinlog;
 pub mod readevent;
+pub mod parsevalue;
 
 pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
     let regist_pack = binlog_dump_pack(conf);
@@ -23,10 +25,7 @@ pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
 //    thread::sleep(ten_millis);
     let (event, _) = socketio::get_packet_from_stream(conn);
     if pack::check_pack(&event){
-        loop {
-            let (event, _) = socketio::get_packet_from_stream(conn);
-            replication::readbinlog::readbinlog(&event, conf);
-        }
+        replication::readbinlog::readbinlog(conn, conf);
     }
     else {
         let err = pack::erro_pack(&event);

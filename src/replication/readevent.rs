@@ -4,12 +4,24 @@
 */
 use crate::{readvalue, Config};
 use crate::meta;
-use std::process;
+use std::{process, io};
 use crate::readvalue::read_string_value;
 use std::borrow::Borrow;
 use uuid;
 use uuid::Uuid;
-use std::io::Read;
+use std::io::{Read, Cursor, Seek, SeekFrom, Result};
+use crate::meta::ColumnTypeDict;
+use byteorder::{ReadBytesExt, LittleEndian};
+use failure::_core::str::from_utf8;
+
+
+pub trait Tell: Seek {
+    fn tell(&mut self) -> Result<u64> {
+        self.seek(SeekFrom::Current(0))
+    }
+}
+
+impl<T> Tell for T where T: Seek { }
 
 
 #[derive(Debug)]
@@ -27,11 +39,11 @@ pub enum BinlogEvent{
 }
 
 pub trait InitHeader{
-    fn new(buf: &Vec<u8>, conf: &Config) -> Self;
+    fn new<R: Read+Seek>(buf: &mut R, conf: &Config) -> Self;
 }
 
 pub trait InitValue{
-    fn read_event(header: &EventHeader, buf: &Vec<u8>) -> Self;
+    fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> Self;
 }
 
 
@@ -58,21 +70,19 @@ pub struct EventHeader{
 }
 
 impl InitHeader for EventHeader {
-    fn new(buf: &Vec<u8>, conf: &Config) -> EventHeader{
+    fn new<R: Read + Seek>(buf: &mut R, conf: &Config) -> EventHeader{
         let mut header_length: u8 = 19;
-        let mut offset = 0;
         if conf.conntype == String::from("repl"){
             //如果是模拟slave同步会多亿字节的头部分
-            offset += 1;
+            buf.seek(io::SeekFrom::Current(1));
             header_length += 1;
         }
-
-        let (timestamp,offset) = (readvalue::read_u32(&buf[offset..offset+4]),offset + 4);
-        let (type_code,offset) = (Self::get_type_code_event(&Some(buf[offset])),offset+1);
-        let (server_id,offset) = (readvalue::read_u32(&buf[offset..offset+4]),offset + 4);
-        let (event_length,offset) = (readvalue::read_u32(&buf[offset..offset+4]),offset + 4);
-        let (next_position,offset) = (readvalue::read_u32(&buf[offset..offset+4]),offset + 4);
-        let flags = readvalue::read_u16(&buf[offset..offset+2]);
+        let timestamp = buf.read_u32::<LittleEndian>().unwrap();
+        let type_code = Self::get_type_code_event(&Some(buf.read_u8().unwrap() as u8));
+        let server_id = buf.read_u32::<LittleEndian>().unwrap();
+        let event_length = buf.read_u32::<LittleEndian>().unwrap();
+        let next_position = buf.read_u32::<LittleEndian>().unwrap();
+        let flags = buf.read_u16::<LittleEndian>().unwrap();
         EventHeader{
             timestamp,
             type_code,
@@ -125,17 +135,23 @@ pub struct QueryEvent{
 }
 
 impl InitValue for QueryEvent{
-    fn read_event(header: &EventHeader, buf: &Vec<u8>) -> QueryEvent{
-        let mut offset = (header.header_length) as usize;
-        let (thread_id, offset) = (readvalue::read_u32(&buf[..offset+4]), offset + 4);
-        let (execute_seconds, offset) = (readvalue::read_u32(&buf[offset..offset+4]), offset + 4);
-        let (database_length, offset) = (buf[offset] as usize, offset + 1);
-        let (error_code, offset) = (readvalue::read_u16(&buf[offset..offset+2]), offset + 2);
-        let (variable_block_length, mut offset) = (readvalue::read_u16(&buf[offset..offset+2]) as usize, offset + 2);
-        offset += variable_block_length;
-        let (database, mut offset) = (readvalue::read_string_value(&buf[offset..offset+ database_length]), offset + database_length);
-        offset += 1 ;
-        let command = readvalue::read_string_value(&buf[offset..]);
+    fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> QueryEvent{
+        let thread_id = buf.read_u32::<LittleEndian>().unwrap();
+        let execute_seconds = buf.read_u32::<LittleEndian>().unwrap();
+        let database_length = buf.read_u8().unwrap();
+        let error_code = buf.read_u16::<LittleEndian>().unwrap();
+        let variable_block_length = buf.read_u16::<LittleEndian>().unwrap();
+        buf.seek(io::SeekFrom::Current(variable_block_length as i64));
+        let mut database_pack = vec![0u8; database_length as usize];
+        buf.read_exact(&mut database_pack);
+        let database = readvalue::read_string_value(&database_pack);
+        buf.seek(io::SeekFrom::Current(1));
+
+        let command_length = header.event_length as usize - buf.tell().unwrap() as usize;
+        let mut command_pak = vec![];
+        buf.read_to_end(&mut command_pak);
+        let command = readvalue::read_string_value(&command_pak);
+
         QueryEvent{
             thread_id,
             execute_seconds,
@@ -146,6 +162,19 @@ impl InitValue for QueryEvent{
     }
 }
 
+#[derive(Debug)]
+pub struct XidEvent{
+    pub xid: u64
+}
+
+impl InitValue for XidEvent{
+    fn read_event<R: Read>(header: &EventHeader, buf: &mut R) -> XidEvent{
+        let xid = buf.read_u64::<LittleEndian>().unwrap();
+        XidEvent{
+            xid
+        }
+    }
+}
 
 /*
 rotate_log_event:
@@ -158,10 +187,11 @@ pub struct RotateLog{
 }
 
 impl InitValue for RotateLog{
-    fn read_event(header: &EventHeader, buf: &Vec<u8>) -> RotateLog{
+    fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> RotateLog{
         let fixed_length: usize = 8;
-        let offset = fixed_length + header.header_length as usize;
-        let binlog_file = readvalue::read_string_value(&buf[offset..]);
+        buf.seek(io::SeekFrom::Current(8));
+        let num= header.event_length as usize - header.header_length as usize - fixed_length;
+        let binlog_file = readvalue::read_string_value_from_len(buf, num);
         RotateLog{
             binlog_file
         }
@@ -188,70 +218,92 @@ table_map_event:
         .........
 */
 #[derive(Debug)]
+pub struct ColumnInfo {
+    pub column_type: ColumnTypeDict,
+    pub column_meta: Vec<usize>
+}
+
+#[derive(Debug)]
 pub struct TableMap{
     pub database_name: String,
     pub table_name: String,
     pub column_count: u8,
-    pub column_type_list: Vec<u8>,
-    pub column_meta_list: Vec<Vec<Vec<usize>>>,
+    pub column_info: Vec<ColumnInfo>,
 }
 impl TableMap{
-    fn read_column_meta(buf: &Vec<u8>,col_type: &u8,offset: usize) -> (Vec<Vec<usize>>,usize) {
-        let mut value: Vec<Vec<usize>> = vec![];
-        let mut offset = offset;
-        let column_type_info = meta::ColumnTypeDict::new();
-        if col_type == &column_type_info.MYSQL_TYPE_VAR_STRING{
-            value.push(Self::read_string_meta(&buf[offset..offset + 2]));
-            offset += 2;
+    pub fn new() -> TableMap {
+        TableMap{
+            database_name: "".to_string(),
+            table_name: "".to_string(),
+            column_count: 0,
+            column_info: vec![]
         }
-        else if col_type == &column_type_info.MYSQL_TYPE_VARCHAR {
-            value.push(Self::read_string_meta(&buf[offset..offset + 2]));
-            offset += 2;
-        }
-        else if col_type == &column_type_info.MYSQL_TYPE_BLOB {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_MEDIUM_BLOB {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_LONG_BLOB {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_TINY_BLOB {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_JSON {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_TIMESTAMP2 {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_DATETIME2 {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_TIME2 {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_NEWDECIMAL {
-            value.push(Self::read_newdecimal(&buf[offset..offset + 2]).to_owned().to_vec());
-            offset += 2;
-        }else if col_type == &column_type_info.MYSQL_TYPE_FLOAT {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_DOUBLE {
-            value.push(vec![buf[offset] as usize]);
-            offset += 1;
-        }else if col_type == &column_type_info.MYSQL_TYPE_STRING {
-            value.push(Self::read_string_type(&buf[offset..offset + 2], col_type).to_owned().to_vec());
-            offset += 2;
-        }else {
-            value.push(vec![0]);
-        }
-        return (value,offset);
     }
 
-    fn read_string_meta(buf: &[u8]) -> Vec<usize> {
-        let metadata = readvalue::read_u16(buf);
+    fn read_column_meta<R: Read>(buf: &mut R,col_type: &u8) -> Vec<usize> {
+        let mut value: Vec<usize> = vec![];
+        //let mut offset = offset;
+        let column_type_info = ColumnTypeDict::from_type_code(col_type);
+        match column_type_info {
+            ColumnTypeDict::MYSQL_TYPE_VAR_STRING => {
+                value = Self::read_string_meta(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_VARCHAR => {
+                value = Self::read_string_meta(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_BLOB => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_MEDIUM_BLOB => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_LONG_BLOB => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_TINY_BLOB => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_JSON => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_TIMESTAMP2 => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_DATETIME2 => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_TIME2 => {
+                //value = vec![buf[offset] as usize];
+                //offset += 1;
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_NEWDECIMAL => {
+                value.extend(Self::read_newdecimal(buf).to_owned().to_vec());
+            }
+            ColumnTypeDict::MYSQL_TYPE_FLOAT => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_DOUBLE => {
+                value = Self::read_one_bytes(buf);
+            }
+            ColumnTypeDict::MYSQL_TYPE_STRING => {
+                value = Self::read_string_type(buf, col_type);
+            }
+            _ => {
+                value = vec![0];
+            }
+        }
+        return value;
+    }
+
+    fn read_one_bytes<R: Read>(buf: &mut R) -> Vec<usize> {
+        let v = buf.read_u8().unwrap() as usize;
+        vec![v]
+    }
+
+
+    fn read_string_meta<R: Read>(buf: &mut R) -> Vec<usize> {
+        let metadata = buf.read_u16::<LittleEndian>().unwrap();
         let mut v = vec![];
         if metadata > 255 {
             v.push(2);
@@ -261,56 +313,50 @@ impl TableMap{
         v
     }
 
-    fn read_newdecimal(buf: &[u8]) -> [usize;2] {
-        let precision = buf[0] as usize;
-        let decimals = buf[1] as usize;
+    fn read_newdecimal<R: Read>(buf: &mut R) -> [usize;2] {
+        let precision = buf.read_u8().unwrap() as usize;
+        let decimals = buf.read_u8().unwrap() as usize;
         [precision,decimals]
     }
 
-    fn read_string_type(buf: &[u8],col_type: &u8) -> [usize;1] {
-        let _type = buf[0];
-        let metadata = buf[1] as usize;
+    fn read_string_type<R: Read>(buf: &mut R,col_type: &u8) -> Vec<usize> {
+        let _type = buf.read_u8().unwrap();
+        let metadata = buf.read_u8().unwrap() as usize;
         if col_type != &_type{
-            [65535]
+            vec![65535]
         }else {
-            [metadata]
+            vec! [metadata]
         }
     }
 
 }
 
 impl InitValue for TableMap{
-    fn read_event( header: &EventHeader,buf: &Vec<u8>) -> TableMap{
-        let table_map_event_fix_length = 8;
-        let mut offset = table_map_event_fix_length + header.header_length as usize;
-        let (database_length, offset) = (buf[offset] as usize, offset + 1);
-        let (database_name, mut offset) = (readvalue::read_string_value(&buf[offset..offset+database_length]), offset + database_length);
-        offset += 1;
-        let (table_length, offset) = (buf[offset] as usize, offset + 1);
-        let (table_name, mut offset) = (readvalue::read_string_value(&buf[offset..offset+table_length]), offset + table_length);
-        offset += 1;
-        let (column_count, mut offset) = (buf[offset],offset + 1);
-        let mut column_type_list = vec![];
-        let mut num = 0;
-        while num < column_count {
-            let column_type= buf[offset];
-            offset += 1;
-            column_type_list.push(column_type);
-            num += 1;
+    fn read_event<R: Read+Seek>( header: &EventHeader,buf: &mut R) -> TableMap{
+        buf.seek(io::SeekFrom::Current(8));
+        let database_length = buf.read_u8().unwrap() as usize;
+        let database_name = readvalue::read_string_value_from_len(buf, database_length);
+        buf.seek(io::SeekFrom::Current(1));
+        let table_length = buf.read_u8().unwrap() as usize;
+        let table_name = readvalue::read_string_value_from_len(buf, table_length);
+        buf.seek(io::SeekFrom::Current(1));
+
+        let column_count = buf.read_u8().unwrap();
+        let mut column_info: Vec<ColumnInfo> = vec![];
+        let mut column_type_list = vec![0u8; column_count as usize];
+        buf.read_exact(&mut column_type_list);
+        buf.seek(io::SeekFrom::Current(1)); //跳过mmetadata_lenth,直接用字段数据进行判断
+        for col_type in column_type_list.iter() {
+            let col_meta = Self::read_column_meta(buf, col_type);
+            column_info.push(ColumnInfo{column_type: ColumnTypeDict::from_type_code(col_type),column_meta: col_meta});
         }
-        let mut column_meta_list = vec![];
-        for col_type in column_type_list.iter(){
-            //let col_meta = vec![];
-            let (col_meta, offset) = Self::read_column_meta(buf, col_type,offset);
-            column_meta_list.push(col_meta);
-        }
+
 
         TableMap{
             database_name,
             table_name,
             column_count,
-            column_meta_list,
-            column_type_list
+            column_info
         }
     }
 }
@@ -347,18 +393,17 @@ pub struct GtidEvent{
 }
 
 impl InitValue for GtidEvent {
-    fn read_event(header: &EventHeader, buf: &Vec<u8>) -> GtidEvent {
-        let offset = (header.header_length + 1) as usize;
-        let (uuid, offset) = (buf[offset..offset+16].to_vec(), offset + 16);
-        let mut sid = [0u8;16];
-        for i in (0..16){
-            sid[i] = uuid[i];
-        }
-        let gtid = uuid::Uuid::from_bytes(sid);
-        let (gno_id, offset) = (readvalue::read_u64(&buf[offset..offset+8]), offset + 8 +1);
+    fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> GtidEvent {
+        buf.seek(io::SeekFrom::Current(1));
+        let mut sid = [0 as u8; 16];
+        buf.read_exact(&mut sid);
 
-        let (last_committed, offset) = (readvalue::read_u64(&buf[offset..offset+8]), offset + 8);
-        let (sequence_number, offset) = (readvalue::read_u64(&buf[offset..offset+8]), offset + 8);
+        let gtid = uuid::Uuid::from_bytes(sid);
+        let gno_id = buf.read_u64::<LittleEndian>().unwrap();
+
+        let last_committed = buf.read_u64::<LittleEndian>().unwrap();
+        let sequence_number = buf.read_u64::<LittleEndian>().unwrap();
+
         GtidEvent{
             gtid,
             gno_id,

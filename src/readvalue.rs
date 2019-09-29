@@ -4,8 +4,20 @@
 */
 
 use std::str::from_utf8;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use byteorder::{ReadBytesExt, LittleEndian, WriteBytesExt, BigEndian};
+use uuid::Error;
+
+pub fn read_num_pack<R: Read, S: Into<usize>>(num: S, buf: &mut R) -> Vec<u8> {
+    let mut pack = vec![0u8; num.into()];
+    buf.read_exact(&mut pack);
+    pack.to_vec()
+}
+
+pub fn read_string_value_from_len<R: Read, S: Into<usize>>(buf: &mut R,num: S) -> String {
+    let pack = read_num_pack(num,buf);
+    from_utf8(&pack).unwrap().parse().unwrap()
+}
 
 pub fn read_string_value(pack: &[u8]) -> String{
     from_utf8(pack).unwrap().parse().unwrap()
@@ -16,9 +28,19 @@ pub fn read_u16(pack: &[u8]) -> u16 {
     rdr.read_u16::<LittleEndian>().unwrap()
 }
 
+pub fn read_i16(pack: &[u8]) -> i16 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_i16::<LittleEndian>().unwrap()
+}
+
 pub fn read_u24(pack: &[u8]) -> u32 {
     let mut rdr = Cursor::new(pack);
     rdr.read_u24::<LittleEndian>().unwrap()
+}
+
+pub fn read_i24(pack: &[u8]) -> i32 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_i24::<LittleEndian>().unwrap()
 }
 
 pub fn read_u32(pack: &[u8]) -> u32 {
@@ -26,9 +48,41 @@ pub fn read_u32(pack: &[u8]) -> u32 {
     rdr.read_u32::<LittleEndian>().unwrap()
 }
 
+pub fn read_i32(pack: &[u8]) -> i32 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_i32::<LittleEndian>().unwrap()
+}
+
+pub fn read_u40(pack: &[u8]) -> usize {
+    let a = pack[0] as usize;
+    let b = read_u32(&pack[1..]) as usize;
+    a + (b << 8)
+}
+
+pub fn read_u48(pack: &[u8]) -> usize {
+    let a = read_u16(&pack[0..2]) as usize;
+    let b = read_u16(&pack[2..4]) as usize;
+    let c = read_u16(&pack[4..]) as usize;
+    a + (b << 16) + (c << 32)
+}
+
+pub fn read_u56(pack: &[u8]) -> usize {
+    let mut a = pack[0] as usize;
+    let b = read_u16(&pack[1..3]) as usize;
+    let c = read_u32(&pack[3..]) as usize;
+    a + (b << 8) + (c << 24)
+}
+
+
 pub fn read_u64(pack: &[u8]) -> u64 {
     let mut rdr = Cursor::new(pack);
     rdr.read_u64::<LittleEndian>().unwrap()
+}
+
+
+pub fn read_i64(pack: &[u8]) -> i64 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_i64::<LittleEndian>().unwrap()
 }
 
 pub fn read_big_u64(pack: &[u8]) -> u64 {
@@ -58,5 +112,15 @@ pub fn write_u16(num: u16) -> Vec<u8> {
     let mut rdr = Vec::new();
     rdr.write_u16::<LittleEndian>(num).unwrap();
     return rdr;
+}
+
+pub fn read_f32(pack: &[u8]) -> f32 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_f32::<LittleEndian>().unwrap()
+}
+
+pub fn read_f64(pack: &[u8]) -> f64 {
+    let mut rdr = Cursor::new(pack);
+    rdr.read_f64::<LittleEndian>().unwrap()
 }
 
