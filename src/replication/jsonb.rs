@@ -22,7 +22,6 @@ pub fn read_binary_json<R: Read>(buf: &mut R, var_length: &usize) -> JsonValue {
 fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) -> JsonValue {
     let var_length = var_length.clone() - 1;
     let json_type_code = JsonType::from_type_code(m);
-    println!("{:?}",json_type_code);
     let mut large = false;
     match json_type_code {
         JsonType::JSONB_TYPE_LARGE_OBJECT |
