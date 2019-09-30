@@ -8,6 +8,7 @@ use serde::{Serialize,Serializer};
 use crate::replication::readevent::{TableMap, EventHeader, BinlogEvent, Tell};
 use crate::meta::ColumnTypeDict;
 use crate::readvalue;
+use crate::replication::jsonb;
 use uuid::Error;
 use uuid::Version::Mac;
 use std::process::id;
@@ -285,7 +286,9 @@ impl RowValue{
                 MySQLValue::Blob(Blob::from(pack.to_vec()))
             }
             ColumnTypeDict::MYSQL_TYPE_JSON => {
-                MySQLValue::Null
+                let value_length = Self::read_str_value_length(buf, &col_meta[0]);
+                MySQLValue::Json(jsonb::read_binary_json(buf, &value_length))
+
             }
             ColumnTypeDict::MYSQL_TYPE_STRING => {
                 let mut value_length = 0;

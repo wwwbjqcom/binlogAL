@@ -12,6 +12,7 @@ use std::collections::HashMap;
 pub mod readbinlog;
 pub mod readevent;
 pub mod parsevalue;
+pub mod jsonb;
 
 pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
     let regist_pack = binlog_dump_pack(conf);

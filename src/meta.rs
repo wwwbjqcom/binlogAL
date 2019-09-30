@@ -136,6 +136,59 @@ impl ColumnTypeDict {
         }
     }
 }
+#[derive(Debug)]
+pub enum JsonType{
+    NULL_COLUMN,
+    UNSIGNED_CHAR_COLUMN,
+    UNSIGNED_SHORT_COLUMN,
+    UNSIGNED_INT24_COLUMN,
+    UNSIGNED_INT64_COLUMN,
+    UNSIGNED_CHAR_LENGTH,
+    UNSIGNED_SHORT_LENGTH,
+    UNSIGNED_INT24_LENGTH,
+    UNSIGNED_INT64_LENGTH,
+    JSONB_TYPE_SMALL_OBJECT,
+    JSONB_TYPE_LARGE_OBJECT,
+    JSONB_TYPE_SMALL_ARRAY,
+    JSONB_TYPE_LARGE_ARRAY,
+    JSONB_TYPE_LITERAL,
+    JSONB_TYPE_INT16,
+    JSONB_TYPE_UINT16,
+    JSONB_TYPE_INT32,
+    JSONB_TYPE_UINT32,
+    JSONB_TYPE_INT64,
+    JSONB_TYPE_UINT64,
+    JSONB_TYPE_DOUBLE,
+    JSONB_TYPE_STRING,
+    JSONB_TYPE_OPAQUE,
+    JSONB_LITERAL_NULL,
+    JSONB_LITERAL_TRUE,
+    JSONB_LITERAL_FALSE,
+
+}
+
+impl JsonType {
+    pub fn from_type_code(type_code: &usize) -> JsonType{
+        match type_code {
+            0x0 => JsonType::JSONB_TYPE_SMALL_OBJECT,
+            0x1 => JsonType::JSONB_TYPE_LARGE_OBJECT,
+            0x2 => JsonType::JSONB_TYPE_SMALL_ARRAY,
+            0x3 => JsonType::JSONB_TYPE_LARGE_ARRAY,
+            0x4 => JsonType::JSONB_TYPE_LITERAL,
+            0x5 => JsonType::JSONB_TYPE_INT16,
+            0x6 => JsonType::JSONB_TYPE_UINT16,
+            0x7 => JsonType::JSONB_TYPE_INT32,
+            0x8 => JsonType::JSONB_TYPE_UINT32,
+            0x9 => JsonType::JSONB_TYPE_INT64,
+            0xA => JsonType::JSONB_TYPE_UINT64,
+            0xB => JsonType::JSONB_TYPE_DOUBLE,
+            0xC => JsonType::JSONB_TYPE_STRING,
+            0xF => JsonType::JSONB_TYPE_OPAQUE,
+            0x0 => JsonType::JSONB_LITERAL_NULL,
+            _ => JsonType::NULL_COLUMN
+        }
+    }
+}
 
 
 
