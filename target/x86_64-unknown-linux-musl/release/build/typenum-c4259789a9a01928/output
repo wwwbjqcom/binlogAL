@@ -1,0 +1,2 @@
+cargo:rustc-env=TYPENUM_BUILD_OP=/Users/manitomanito/Documents/GitHub/my_rust_test/target/x86_64-unknown-linux-musl/release/build/typenum-c4259789a9a01928/out/consts.rs
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/manitomanito/Documents/GitHub/my_rust_test/target/x86_64-unknown-linux-musl/release/build/typenum-c4259789a9a01928/out/op.rs

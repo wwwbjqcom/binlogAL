@@ -11,7 +11,7 @@ use crate::readvalue;
 use crate::replication::jsonb;
 use uuid::Error;
 use uuid::Version::Mac;
-use std::process::id;
+use std::process::{id, exit};
 use std::fs::metadata;
 use bigdecimal::BigDecimal;
 use std::io::{Read, Cursor, Seek, SeekFrom};
@@ -125,8 +125,15 @@ fn is_null(null_bytes: &Vec<u8>, pos: &usize) -> u8 {
 }
 impl RowValue{
     pub fn read_row_value<R: Read+Seek>(buf: &mut R, map: &TableMap, header: &EventHeader) -> RowValue {
-        let row_event_fix = 10;
+        let row_event_fix = 8;
         buf.seek(io::SeekFrom::Current(row_event_fix));
+        let extra_len = buf.read_u16::<LittleEndian>().unwrap();
+        if extra_len > 2 {
+            //println!("extra_len:{}",extra_len);
+            buf.seek(io::SeekFrom::Current((extra_len - 2) as i64));
+        }
+
+        //let col_count = map.column_info.len();
         let col_count = buf.read_u8().unwrap();
 
         let columns_length = ((col_count + 7) / 8) as i64;
@@ -148,6 +155,7 @@ impl RowValue{
             let mut row: Vec<Option<MySQLValue>> = vec![];
             let columns = map.column_info.len();
             for idx in (0..columns) {
+                //println!("{},{:?},{},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),null_bit.len(),columns_length);
                 let value= if is_null(&null_bit.to_vec(), &idx) > 0{
                     MySQLValue::Null
                 } else {

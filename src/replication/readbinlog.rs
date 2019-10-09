@@ -83,6 +83,7 @@ pub fn readbinlog(conn: &mut TcpStream, conf: &Config) {
         let mut cur = Cursor::new(buf);
 
         let event_header: EventHeader = readevent::InitHeader::new(&mut cur,conf);
+        //println!("{:?}",event_header);
         match event_header.type_code {
             readevent::BinlogEvent::GtidEvent => {
                 let a = readevent::GtidEvent::read_event( &event_header, &mut cur);
