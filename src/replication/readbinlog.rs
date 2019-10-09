@@ -97,12 +97,12 @@ pub fn readbinlog(conn: &mut TcpStream, conf: &Config) {
                 println!("{:?}",a);
                 tabl_map = a;
             },
-            readevent::BinlogEvent::UpdateEvent => {},
+            readevent::BinlogEvent::UpdateEvent |
+            readevent::BinlogEvent::DeleteEvent |
             readevent::BinlogEvent::WriteEvent => {
                 let a = parsevalue::RowValue::read_row_value(&mut cur, &tabl_map, &event_header);
                 println!("{:?}",a);
             },
-            readevent::BinlogEvent::DeleteEvent => {},
             readevent::BinlogEvent::XidEvent => {
                 let a = readevent::XidEvent::read_event(&event_header,&mut cur);
                 println!("{:?}",a);

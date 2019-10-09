@@ -80,6 +80,12 @@ pub fn read_u64(pack: &[u8]) -> u64 {
     rdr.read_u64::<LittleEndian>().unwrap()
 }
 
+pub fn write_u64(num: u64) -> Vec<u8> {
+    let mut rdr = Vec::new();
+    rdr.write_u64::<LittleEndian>(num).unwrap();
+    return rdr;
+}
+
 
 pub fn read_i64(pack: &[u8]) -> i64 {
     let mut rdr = Cursor::new(pack);
