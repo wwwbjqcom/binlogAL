@@ -9,15 +9,10 @@ use crate::replication::readevent::{TableMap, EventHeader, BinlogEvent, Tell};
 use crate::meta::ColumnTypeDict;
 use crate::readvalue;
 use crate::replication::jsonb;
-use uuid::Error;
-use uuid::Version::Mac;
-use std::process::{id, exit};
-use std::fs::metadata;
 use bigdecimal::BigDecimal;
-use std::io::{Read, Cursor, Seek, SeekFrom};
+use std::io::{Read, Cursor, Seek};
 use byteorder::{ReadBytesExt, BigEndian, LittleEndian};
 use std::io;
-use std::process;
 
 #[derive(Debug)]
 struct DecimalMeta{
@@ -115,7 +110,7 @@ The The data first length of the varchar type more than 255 are 2 bytes
 
 #[derive(Debug)]
 pub struct RowValue{
-    rows: Vec<Vec<Option<MySQLValue>>>,
+    pub(crate) rows: Vec<Vec<Option<MySQLValue>>>,
 }
 
 fn is_null(null_bytes: &Vec<u8>, pos: &usize) -> u8 {
@@ -126,11 +121,11 @@ fn is_null(null_bytes: &Vec<u8>, pos: &usize) -> u8 {
 impl RowValue{
     pub fn read_row_value<R: Read+Seek>(buf: &mut R, map: &TableMap, header: &EventHeader) -> RowValue {
         let row_event_fix = 8;
-        buf.seek(io::SeekFrom::Current(row_event_fix));
+        buf.seek(io::SeekFrom::Current(row_event_fix)).unwrap();
         let extra_len = buf.read_u16::<LittleEndian>().unwrap();
         if extra_len > 2 {
             //println!("extra_len:{}",extra_len);
-            buf.seek(io::SeekFrom::Current((extra_len - 2) as i64));
+            buf.seek(io::SeekFrom::Current((extra_len - 2) as i64)).unwrap();
         }
 
         //let col_count = map.column_info.len();
@@ -139,10 +134,10 @@ impl RowValue{
         let columns_length = ((col_count + 7) / 8) as i64;
         match header.type_code {
             BinlogEvent::UpdateEvent => {
-                buf.seek(io::SeekFrom::Current(columns_length * 2));
+                buf.seek(io::SeekFrom::Current(columns_length * 2)).unwrap();
             }
             _ => {
-                buf.seek(io::SeekFrom::Current(columns_length));
+                buf.seek(io::SeekFrom::Current(columns_length)).unwrap();
 
             }
         }
@@ -150,11 +145,11 @@ impl RowValue{
         let mut rows: Vec<Vec<Option<MySQLValue>>> = vec![];;
         loop {
             let mut null_bit = vec![0u8; columns_length as usize];
-            buf.read_exact(&mut null_bit);
+            buf.read_exact(&mut null_bit).unwrap();
 
             let mut row: Vec<Option<MySQLValue>> = vec![];
             let columns = map.column_info.len();
-            for idx in (0..columns) {
+            for idx in 0..columns {
                 //println!("{},{:?},{},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),null_bit.len(),columns_length);
                 let value= if is_null(&null_bit.to_vec(), &idx) > 0{
                     MySQLValue::Null
@@ -196,7 +191,7 @@ impl RowValue{
             ColumnTypeDict::MYSQL_TYPE_NEWDECIMAL => {
                 let decimal_meta = DecimalMeta::new(col_meta[0] as u8, col_meta[1] as u8);
                 let mut value_buf = vec![0u8; decimal_meta.bytes_to_read];
-                buf.read_exact(&mut value_buf);
+                buf.read_exact(&mut value_buf).unwrap();
                 match Self::read_new_decimal(&value_buf.to_vec(), &decimal_meta) {
                     Ok(T) => MySQLValue::Decimal(T),
                     Err(e) => {
@@ -231,7 +226,7 @@ impl RowValue{
                 40 bits = 5 bytes
                 */
                 let mut tmp_buf = [0u8; 5];
-                buf.read_exact(&mut tmp_buf);
+                buf.read_exact(&mut tmp_buf).unwrap();
                 let subsecond = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
                 tmp_buf[0] &= 0x7f;
 
@@ -253,7 +248,7 @@ impl RowValue{
                 let value = buf.read_u24::<LittleEndian>().unwrap();
                 let year = (value & ((1 << 15) - 1) << 9) >> 9;
                 let month = (value & ((1 << 4) - 1) << 5) >> 5;
-                let day = (value & ((1 << 5) - 1));
+                let day = value & ((1 << 5) - 1);
                 if year == 0 {MySQLValue::Null}
                 else if month == 0 { MySQLValue::Null }
                 else if day == 0 { MySQLValue::Null }
@@ -273,7 +268,7 @@ impl RowValue{
                 24 bits = 3 bytes
                 */
                 let mut tmp_buf = [0u8; 3];
-                buf.read_exact(&mut tmp_buf);
+                buf.read_exact(&mut tmp_buf).unwrap();
                 let hours = (((tmp_buf[0] & 0x3f) as u32) << 4) | (((tmp_buf[1] & 0xf0) as u32) >> 4);
                 let minutes = (((tmp_buf[1] & 0x0f) as u32) << 2) | (((tmp_buf[2] & 0xb0) as u32) >> 6);
                 let seconds = (tmp_buf[2] & 0x3f) as u32;
@@ -290,7 +285,7 @@ impl RowValue{
             ColumnTypeDict::MYSQL_TYPE_BIT => {
                 let var_length =  Self::read_str_value_length(buf, &col_meta[0]);
                 let mut pack = vec![0u8; var_length];
-                buf.read_exact(&mut pack);
+                buf.read_exact(&mut pack).unwrap();
                 MySQLValue::Blob(Blob::from(pack.to_vec()))
             }
             ColumnTypeDict::MYSQL_TYPE_JSON => {
@@ -334,22 +329,22 @@ impl RowValue{
             4 => buf.read_u32::<LittleEndian>().unwrap() as usize,
             5 => {
                 let mut pack = [0u8; 5];
-                buf.read_exact(&mut pack);
+                buf.read_exact(&mut pack).unwrap();
                 readvalue::read_u40(&pack) as usize
             }
             6 => {
                 let mut pack = [0u8; 6];
-                buf.read_exact(&mut pack);
+                buf.read_exact(&mut pack).unwrap();
                 readvalue::read_u48(&pack) as usize
             }
             7 => {
                 let mut pack = [0u8; 7];
-                buf.read_exact(&mut pack);
+                buf.read_exact(&mut pack).unwrap();
                 readvalue::read_u56(&pack) as usize
             }
             8 => {
                 let mut pack = [0u8; 8];
-                buf.read_exact(&mut pack);
+                buf.read_exact(&mut pack).unwrap();
                 readvalue::read_u64(&pack) as usize
             }
             _ => 0 as usize

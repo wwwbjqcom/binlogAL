@@ -107,6 +107,24 @@ pub fn execute(conn: &mut TcpStream,sql: &String) -> Vec<HashMap<String,String>>
     return a;
 }
 
+pub fn execute_update(conn: &mut TcpStream,sql: &String){
+    let pack = commquery(sql);
+    socketio::write_value(conn,&pack).unwrap_or_else(|err|{
+        println!("{}",err);
+        process::exit(1);
+    });
+
+    let (buf,_) = socketio::get_packet_from_stream(conn);
+    if pack::check_pack(&buf){
+        return;
+    }else {
+        let _err = readvalue::read_string_value(&buf[3..]);
+        println!("执行语句错误: {}",_err);
+        process::exit(1);
+    }
+
+}
+
 //组装COM_Query包
 fn commquery(sql: &String) -> Vec<u8>{
     let mut pack = vec![];
@@ -121,6 +139,7 @@ fn commquery(sql: &String) -> Vec<u8>{
 
 fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>>,&'static str> {
     let (buf,_) = socketio::get_packet_from_stream(conn);
+
     if pack::check_pack(&buf){
         let mut values_info = vec![];   //数据值
         let mut column_info = vec![];   //每个column的信息

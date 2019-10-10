@@ -44,7 +44,7 @@ impl LocalInfo {
         Self{
             client_name: String::from("rust_client"),
             pid:123,
-            client_version:String::from("8.0.17"),
+            client_version:String::from("5.7.20"),
             program_name: program.clone(),
             client_flag,
             max_packet_size:16777215

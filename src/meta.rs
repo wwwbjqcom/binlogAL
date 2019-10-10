@@ -184,7 +184,6 @@ impl JsonType {
             0xB => JsonType::JSONB_TYPE_DOUBLE,
             0xC => JsonType::JSONB_TYPE_STRING,
             0xF => JsonType::JSONB_TYPE_OPAQUE,
-            0x0 => JsonType::JSONB_LITERAL_NULL,
             _ => JsonType::NULL_COLUMN
         }
     }

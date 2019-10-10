@@ -8,8 +8,6 @@ use crate::readvalue;
 use std::io::Read;
 use byteorder::{ReadBytesExt, LittleEndian};
 use std::process;
-use crate::Opt;
-use std::collections::HashMap;
 use serde_json::Value as JsonValue;
 use serde_json::map::Map as JsonMap;
 use failure::_core::iter::FromIterator;
@@ -94,7 +92,6 @@ fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) ->
 fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &bool) -> JsonValue {
     let mut elements: usize;
     let mut size: usize;
-    let mut key_offset_lengths: Vec<Vec<usize>> = vec![];
 
     if *large {
         elements = buf.read_u32::<LittleEndian>().unwrap() as usize;
@@ -111,7 +108,7 @@ fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &boo
 
     let mut key_offset_lengths = vec![];
     if *large{
-        for i in (0..elements){
+        for _i in 0..elements{
             let mut tmp_dict: Vec<usize> = vec![];
             tmp_dict.push(buf.read_u32::<LittleEndian>().unwrap() as usize);
             tmp_dict.push(buf.read_u16::<LittleEndian>().unwrap() as usize);
@@ -119,7 +116,7 @@ fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &boo
 
         }
     } else {
-        for i in (0..elements){
+        for _i in 0..elements{
             let mut tmp_dict: Vec<usize> = vec![];
             tmp_dict.push(buf.read_u16::<LittleEndian>().unwrap() as usize);
             tmp_dict.push(buf.read_u16::<LittleEndian>().unwrap() as usize);
@@ -128,7 +125,7 @@ fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &boo
     }
 
     let mut value_type_inlined_lengths: Vec<ValuesTypeInline> = vec![];
-    for i in (0..elements) {
+    for _i in 0..elements {
         let tmp = ValuesTypeInline::new(buf, large);
         value_type_inlined_lengths.push(tmp);
     }
@@ -139,7 +136,7 @@ fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &boo
     }
 
     let mut values = Vec::with_capacity(elements);
-    for i in (0..elements){
+    for i in 0..elements{
         let value_inlined = &value_type_inlined_lengths[i];
         match value_inlined.b {
             None => {
@@ -157,7 +154,6 @@ fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &boo
                     Some(v) => {
                         values.push(JsonValue::from(v));
                     }
-                    _ => {}
                 }
             }
             _ => {
@@ -295,13 +291,13 @@ fn read_binary_json_array<R: Read>(buf: &mut R, var_length: &usize, large: &bool
     }
 
     let mut value_type_inlined_lengths: Vec<ValuesTypeInline> = vec![];
-    for i in (0..elements) {
+    for i in 0..elements {
         let tmp = ValuesTypeInline::new(buf, large);
         value_type_inlined_lengths.push(tmp);
     }
 
     let mut values = Vec::with_capacity(elements);
-    for i in (0..elements) {
+    for i in 0..elements {
         let value_inlined = &value_type_inlined_lengths[i];
         match value_inlined.b {
             None => {
@@ -319,7 +315,6 @@ fn read_binary_json_array<R: Read>(buf: &mut R, var_length: &usize, large: &bool
                     Some(v) => {
                         values.push(JsonValue::from(v));
                     }
-                    _ => {}
                 }
             }
             _ => {

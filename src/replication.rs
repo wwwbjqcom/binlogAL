@@ -4,17 +4,18 @@
 */
 
 use std::net::TcpStream;
-use crate::{replication,Config,readvalue};
+use crate::{replication, Config, readvalue, io};
 use crate::io::{response,pack,socketio};
 use std::process;
-use std::collections::HashMap;
-use uuid::Uuid;
+
 pub mod readbinlog;
 pub mod readevent;
 pub mod parsevalue;
 pub mod jsonb;
 
 pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
+    check_sum(conn);
+
     let mut regist_pack= vec![];
     if conf.gtid.len() > 0 {
         regist_pack = gtid_dump_pack(conf);
@@ -32,17 +33,21 @@ pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
 //    use std::{thread, time};
 //    let ten_millis = time::Duration::from_secs(100);
 //    thread::sleep(ten_millis);
-    let (event, _) = socketio::get_packet_from_stream(conn);
-    if pack::check_pack(&event){
-        replication::readbinlog::readbinlog(conn, conf);
+    replication::readbinlog::readbinlog(conn, conf);
+}
+
+fn check_sum(conn: &mut TcpStream) {
+    let sql = String::from("select @@BINLOG_CHECKSUM as checksum;");
+    let values = io::command::execute(conn,&sql);
+    for row in values.iter(){
+        for (key, value) in row{
+            if value.len() > 0 {
+                let sql = String::from("set @master_binlog_checksum= @@global.binlog_checksum;");
+                io::command::execute_update(conn,&sql);
+                return;
+            }
+        }
     }
-    else {
-        let err = pack::erro_pack(&event);
-        println!("注册slave发生错误:{}",pack::erro_pack(&event));
-    }
-
-
-
 }
 
 /*
@@ -63,7 +68,7 @@ fn binlog_dump_pack(conf: &Config) -> Vec<u8> {
     pack.push(com_binlog_dump);
     pack.extend(readvalue::write_u32(conf.position.parse().unwrap()));
     pack.extend(readvalue::write_u16(flags));
-    pack.extend(readvalue::write_u32(133));
+    pack.extend(readvalue::write_u32(conf.serverid.parse().unwrap()));
     pack.extend(conf.binlogfile.clone().into_bytes());
     let mut pack_all = response::pack_header(&pack,0);
     pack_all.extend(pack);
@@ -109,7 +114,7 @@ fn gtid_dump_pack(conf: &Config) -> Vec<u8> {
     let flags = 0;  //BINLOG_DUMP_BLOCK
     pack.push(com_binlog_dump_gtid);
     pack.extend(readvalue::write_u16(flags));
-    pack.extend(readvalue::write_u32(133));
+    pack.extend(readvalue::write_u32(conf.serverid.parse().unwrap()));
     pack.extend(readvalue::write_u32(3));   //binlognamesize
     pack.extend(&[0u8;3]);   //binlogname
     pack.extend(readvalue::write_u64(4));   //binlog_pos_info

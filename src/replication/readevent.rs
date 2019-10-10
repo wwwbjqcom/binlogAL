@@ -3,16 +3,12 @@
 @datetime: 2019/9/25
 */
 use crate::{readvalue, Config};
-use crate::meta;
-use std::{process, io};
-use crate::readvalue::read_string_value;
-use std::borrow::Borrow;
+use std::{io};
 use uuid;
 use uuid::Uuid;
-use std::io::{Read, Cursor, Seek, SeekFrom, Result};
+use std::io::{Read, Seek, SeekFrom, Result};
 use crate::meta::ColumnTypeDict;
 use byteorder::{ReadBytesExt, LittleEndian};
-use failure::_core::str::from_utf8;
 
 
 pub trait Tell: Seek {
@@ -74,7 +70,7 @@ impl InitHeader for EventHeader {
         let mut header_length: u8 = 19;
         if conf.conntype == String::from("repl"){
             //如果是模拟slave同步会多亿字节的头部分
-            buf.seek(io::SeekFrom::Current(1));
+            buf.seek(io::SeekFrom::Current(1)).unwrap();
             header_length += 1;
         }
         let timestamp = buf.read_u32::<LittleEndian>().unwrap();
@@ -105,7 +101,6 @@ impl EventHeader{
             Some(30) => BinlogEvent::WriteEvent,
             Some(31) => BinlogEvent::UpdateEvent,
             Some(32) => BinlogEvent::DeleteEvent,
-            Some(33) => BinlogEvent::GtidEvent,
             Some(16) => BinlogEvent::XidEvent,
             Some(38) => BinlogEvent::XAPREPARELOGEVENT,
             _ => BinlogEvent::UNKNOWNEVENT
@@ -141,15 +136,15 @@ impl InitValue for QueryEvent{
         let database_length = buf.read_u8().unwrap();
         let error_code = buf.read_u16::<LittleEndian>().unwrap();
         let variable_block_length = buf.read_u16::<LittleEndian>().unwrap();
-        buf.seek(io::SeekFrom::Current(variable_block_length as i64));
+        buf.seek(io::SeekFrom::Current(variable_block_length as i64)).unwrap();
         let mut database_pack = vec![0u8; database_length as usize];
-        buf.read_exact(&mut database_pack);
+        buf.read_exact(&mut database_pack).unwrap();
         let database = readvalue::read_string_value(&database_pack);
-        buf.seek(io::SeekFrom::Current(1));
+        buf.seek(io::SeekFrom::Current(1)).unwrap();
 
         let command_length = header.event_length as usize - buf.tell().unwrap() as usize;
         let mut command_pak = vec![];
-        buf.read_to_end(&mut command_pak);
+        buf.read_to_end(&mut command_pak).unwrap();
         let command = readvalue::read_string_value(&command_pak);
 
         QueryEvent{
@@ -189,9 +184,13 @@ pub struct RotateLog{
 impl InitValue for RotateLog{
     fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> RotateLog{
         let fixed_length: usize = 8;
-        buf.seek(io::SeekFrom::Current(8));
-        let num= header.event_length as usize - header.header_length as usize - fixed_length;
-        let binlog_file = readvalue::read_string_value_from_len(buf, num);
+        buf.seek(io::SeekFrom::Current(8)).unwrap();
+
+        let mut tmp_buf = vec![0u8; header.event_length as usize - header.header_length as usize - fixed_length as usize - 3];
+        buf.read_exact(&mut tmp_buf).unwrap();
+        //buf.read_to_end(&mut tmp_buf).unwrap();
+        //println!("{}",tmp_buf.len());
+        let binlog_file = readvalue::read_string_value(&tmp_buf);
         RotateLog{
             binlog_file
         }
@@ -333,19 +332,19 @@ impl TableMap{
 
 impl InitValue for TableMap{
     fn read_event<R: Read+Seek>( header: &EventHeader,buf: &mut R) -> TableMap{
-        buf.seek(io::SeekFrom::Current(8));
+        buf.seek(io::SeekFrom::Current(8)).unwrap();
         let database_length = buf.read_u8().unwrap() as usize;
         let database_name = readvalue::read_string_value_from_len(buf, database_length);
-        buf.seek(io::SeekFrom::Current(1));
+        buf.seek(io::SeekFrom::Current(1)).unwrap();
         let table_length = buf.read_u8().unwrap() as usize;
         let table_name = readvalue::read_string_value_from_len(buf, table_length);
-        buf.seek(io::SeekFrom::Current(1));
+        buf.seek(io::SeekFrom::Current(1)).unwrap();
 
         let column_count = buf.read_u8().unwrap();
         let mut column_info: Vec<ColumnInfo> = vec![];
         let mut column_type_list = vec![0u8; column_count as usize];
-        buf.read_exact(&mut column_type_list);
-        buf.seek(io::SeekFrom::Current(1)); //跳过mmetadata_lenth,直接用字段数据进行判断
+        buf.read_exact(&mut column_type_list).unwrap();
+        buf.seek(io::SeekFrom::Current(1)).unwrap(); //跳过mmetadata_lenth,直接用字段数据进行判断
         for col_type in column_type_list.iter() {
             let col_meta = Self::read_column_meta(buf, col_type);
             column_info.push(ColumnInfo{column_type: ColumnTypeDict::from_type_code(col_type),column_meta: col_meta});
@@ -394,9 +393,9 @@ pub struct GtidEvent{
 
 impl InitValue for GtidEvent {
     fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R) -> GtidEvent {
-        buf.seek(io::SeekFrom::Current(1));
+        buf.seek(io::SeekFrom::Current(1)).unwrap();
         let mut sid = [0 as u8; 16];
-        buf.read_exact(&mut sid);
+        buf.read_exact(&mut sid).unwrap();
 
         let gtid = uuid::Uuid::from_bytes(sid);
         let gno_id = buf.read_u64::<LittleEndian>().unwrap();

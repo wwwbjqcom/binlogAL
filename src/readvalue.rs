@@ -6,12 +6,11 @@
 use std::str::from_utf8;
 use std::io::{Cursor, Read};
 use byteorder::{ReadBytesExt, LittleEndian, WriteBytesExt, BigEndian};
-use uuid::Error;
 use std::io;
 
 pub fn read_num_pack<R: Read, S: Into<usize>>(num: S, buf: &mut R) -> Vec<u8> {
     let mut pack = vec![0u8; num.into()];
-    buf.read_exact(&mut pack);
+    buf.read_exact(&mut pack).unwrap();
     pack.to_vec()
 }
 
@@ -21,7 +20,14 @@ pub fn read_string_value_from_len<R: Read, S: Into<usize>>(buf: &mut R,num: S) -
 }
 
 pub fn read_string_value(pack: &[u8]) -> String{
-    from_utf8(pack).unwrap().parse().unwrap()
+    match from_utf8(pack) {
+        Ok(T) => T.parse().unwrap(),
+        Err(e) => {
+            println!("{:?}", e);
+            String::from("")
+        }
+    }
+
 }
 
 pub fn read_u16(pack: &[u8]) -> u16 {

@@ -40,7 +40,7 @@ fn get_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader){
                 }
             }
             Err(_) => {
-                //println!("read packet error");
+                //println!("{}",e);
             }
         }
 

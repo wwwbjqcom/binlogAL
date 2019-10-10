@@ -12,7 +12,6 @@ use std::process;
 
 
 use structopt::StructOpt;
-use std::fs::OpenOptions;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
@@ -49,6 +48,9 @@ pub struct Opt {
 
     #[structopt(long = "conntype", help="连接操作类型，repl、command 分别对应slave同步和执行sql")]
     pub conntype: Option<String>,
+
+    #[structopt(long = "serverid", help="注册用的server_id，不能与已经存在的同步线程重复")]
+    pub serverid: Option<String>,
 }
 
 #[derive(Debug)]
@@ -65,6 +67,7 @@ pub struct Config {
     pub position: String,
     pub gtid: String,
     pub conntype: String,
+    pub serverid: String
 }
 
 impl Config{
@@ -80,6 +83,7 @@ impl Config{
         let mut position = String::from("");
         let mut gtid = String::from("");
         let mut conntype = String::from("");
+        let mut serverid = String::from("");
         match args.user {
             None => {
                 return Err("user 不能为空！！");
@@ -128,8 +132,7 @@ impl Config{
 
         match args.position {
             None => (),
-            Some(t) => position = t,
-            _ => {}
+            Some(t) => position = t
         }
 
         match args.gtid {
@@ -142,9 +145,15 @@ impl Config{
             Some(t) => conntype = t,
         }
 
+        match args.serverid {
+            None => (),
+            Some(t) => serverid = t,
+        }
+
+
         Ok(Config { program_name:String::from("rust_test"),
             host_info, user_name ,
-            password, database,
+            password, database,serverid,
             command,repltype,file,binlogfile,position,gtid,conntype})
     }
 }
@@ -159,7 +168,7 @@ pub fn startop(config: &Config) {
         //let sql = String::from("show master status");
         let values = io::command::execute(&mut conn,&config.command);
         for row in values.iter(){
-            println!("{:?}",row);
+            println!("{:#?}",row);
         }
     }else if config.conntype == String::from("repl") {
         replication::repl_register(&mut conn,&config);
