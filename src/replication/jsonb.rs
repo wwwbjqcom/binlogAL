@@ -22,8 +22,8 @@ fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) ->
     let json_type_code = JsonType::from_type_code(m);
     let mut large = false;
     match json_type_code {
-        JsonType::JSONB_TYPE_LARGE_OBJECT |
-        JsonType::JSONB_TYPE_LARGE_ARRAY => {
+        JsonType::JsonbTypeLargeObject |
+        JsonType::JsonbTypeLargeArray => {
             large = true;
         }
         _ => {
@@ -32,15 +32,15 @@ fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) ->
     }
 
     match json_type_code {
-        JsonType::JSONB_TYPE_LARGE_OBJECT |
-        JsonType::JSONB_TYPE_SMALL_OBJECT => {
+        JsonType::JsonbTypeLargeObject |
+        JsonType::JsonbTypeSmallObject => {
             JsonValue::from(read_binary_json_object(buf, &var_length, &large))
         }
-        JsonType::JSONB_TYPE_LARGE_ARRAY |
-        JsonType::JSONB_TYPE_SMALL_ARRAY => {
+        JsonType::JsonbTypeLargeArray |
+        JsonType::JsonbTypeSmallArray => {
             JsonValue::from(read_binary_json_array(buf, &var_length, &large))
         }
-        JsonType::JSONB_TYPE_STRING => {
+        JsonType::JsonbTypeString => {
             let mut byte = 0x80 as usize;
             let mut length = 0 as usize;
             let mut bits_read = 0 as usize;
@@ -51,35 +51,35 @@ fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) ->
             }
             JsonValue::from(readvalue::read_string_value_from_len(buf, length))
         }
-        JsonType::JSONB_TYPE_LITERAL => {
+        JsonType::JsonbTypeLiteral => {
             let value = buf.read_u8().unwrap() as usize;
             let type_code = JsonType::from_type_code(&value);
             match type_code {
-                JsonType::JSONB_LITERAL_NULL => JsonValue::Null,
-                JsonType::JSONB_LITERAL_TRUE => JsonValue::from(true),
-                JsonType::JSONB_LITERAL_FALSE => JsonValue::from(false),
+                JsonType::JsonbLiteralNull => JsonValue::Null,
+                JsonType::JsonbLiteralTrue => JsonValue::from(true),
+                JsonType::JsonbLiteralFalse => JsonValue::from(false),
                 _ => {JsonValue::Null}
             }
         }
-        JsonType::JSONB_TYPE_INT16 => {
+        JsonType::JsonbTypeInt16 => {
             JsonValue::from(buf.read_i16::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_UINT16 => {
+        JsonType::JsonbTypeUint16 => {
             JsonValue::from(buf.read_u16::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_DOUBLE => {
+        JsonType::JsonbTypeDouble => {
             JsonValue::from(buf.read_f64::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_INT32 => {
+        JsonType::JsonbTypeInt32 => {
             JsonValue::from(buf.read_i32::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_UINT32 => {
+        JsonType::JsonbTypeUint32 => {
             JsonValue::from(buf.read_u32::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_INT64 =>{
+        JsonType::JsonbTypeInt64 =>{
             JsonValue::from(buf.read_i64::<LittleEndian>().unwrap())
         }
-        JsonType::JSONB_TYPE_UINT64 => {
+        JsonType::JsonbTypeUint64 => {
             JsonValue::from(buf.read_u64::<LittleEndian>().unwrap())
         }
         _ => {
@@ -90,8 +90,8 @@ fn read_binary_json_type<R: Read>(buf: &mut R, var_length: &usize, m: &usize) ->
 }
 
 fn read_binary_json_object<R: Read>(buf: &mut R, var_length: &usize, large: &bool) -> JsonValue {
-    let mut elements: usize;
-    let mut size: usize;
+    let elements: usize;
+    let size: usize;
 
     if *large {
         elements = buf.read_u32::<LittleEndian>().unwrap() as usize;
@@ -184,35 +184,35 @@ impl LiteralInline{
         let mut a = None;
         let mut b = -1;
         match type_code {
-            JsonType::JSONB_TYPE_LITERAL => {
+            JsonType::JsonbTypeLiteral => {
                 let value = buf.read_u16::<LittleEndian>().unwrap() as usize;
                 let code = JsonType::from_type_code(&value);
                 match code {
-                    JsonType::JSONB_LITERAL_NULL => {
+                    JsonType::JsonbLiteralNull => {
                         a = None;
                     },
-                    JsonType::JSONB_LITERAL_TRUE => {
+                    JsonType::JsonbLiteralTrue => {
                         b = 1;
                     },
-                    JsonType::JSONB_LITERAL_FALSE => {
+                    JsonType::JsonbLiteralFalse => {
                         b = 0;
                     },
                     _ => {}
                 }
             }
-            JsonType::JSONB_TYPE_INT16 => {
+            JsonType::JsonbTypeInt16 => {
                 let tmp = buf.read_i16::<LittleEndian>().unwrap() as usize;
                 a = Some(tmp);
             },
-            JsonType::JSONB_TYPE_UINT16 => {
+            JsonType::JsonbTypeUint16 => {
                 let tmp = buf.read_u16::<LittleEndian>().unwrap() as usize;
                 a = Some(tmp);
             },
-            JsonType::JSONB_TYPE_INT32 => {
+            JsonType::JsonbTypeInt32 => {
                 let tmp = buf.read_i32::<LittleEndian>().unwrap() as usize;
                 a = Some(tmp);
             },
-            JsonType::JSONB_TYPE_UINT32 => {
+            JsonType::JsonbTypeUint32 => {
                 let tmp = buf.read_u32::<LittleEndian>().unwrap() as usize;
                 a = Some(tmp);
             }
@@ -246,14 +246,14 @@ impl ValuesTypeInline{
         let mut c = LiteralInline::default();
         let json_type_code = JsonType::from_type_code(&a);
         match json_type_code {
-            JsonType::JSONB_TYPE_LITERAL |
-            JsonType::JSONB_TYPE_INT16 |
-            JsonType::JSONB_TYPE_UINT16 => {
+            JsonType::JsonbTypeLiteral |
+            JsonType::JsonbTypeInt16 |
+            JsonType::JsonbTypeUint16 => {
                 c = LiteralInline::new(buf,&json_type_code);
                 return ValuesTypeInline{a, b, c};
             }
-            JsonType::JSONB_TYPE_INT32 |
-            JsonType::JSONB_TYPE_UINT32 => {
+            JsonType::JsonbTypeInt32 |
+            JsonType::JsonbTypeUint32 => {
                 if *large{
                     c = LiteralInline::new(buf,&json_type_code);
                     return ValuesTypeInline{a, b, c};
@@ -291,7 +291,7 @@ fn read_binary_json_array<R: Read>(buf: &mut R, var_length: &usize, large: &bool
     }
 
     let mut value_type_inlined_lengths: Vec<ValuesTypeInline> = vec![];
-    for i in 0..elements {
+    for _i in 0..elements {
         let tmp = ValuesTypeInline::new(buf, large);
         value_type_inlined_lengths.push(tmp);
     }

@@ -145,7 +145,7 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
         let mut column_info = vec![];   //每个column的信息
 
         let column_count = buf[0];
-        for number in (0..column_count).rev(){
+        for _ in 0..column_count {
             let (buf,_) = socketio::get_packet_from_stream(conn);
             let column = MetaColumn::new(&buf);
             column_info.push(column);
@@ -156,7 +156,7 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
             let (mut buf,header) = socketio::get_packet_from_stream(conn);
             while header.payload == 0xffffff{
                 println!("{}",header.payload);
-                let (buf_tmp,header) = socketio::get_packet_from_stream(conn);
+                let (buf_tmp,_) = socketio::get_packet_from_stream(conn);
                 buf.extend(buf_tmp);
             }
             if buf[0] == 0x00{

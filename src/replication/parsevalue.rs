@@ -7,7 +7,7 @@ use bigdecimal;
 use serde::{Serialize,Serializer};
 use crate::replication::readevent::{TableMap, EventHeader, BinlogEvent, Tell};
 use crate::meta::ColumnTypeDict;
-use crate::readvalue;
+use crate::{readvalue, Config};
 use crate::replication::jsonb;
 use bigdecimal::BigDecimal;
 use std::io::{Read, Cursor, Seek};
@@ -15,23 +15,23 @@ use byteorder::{ReadBytesExt, BigEndian, LittleEndian};
 use std::io;
 
 #[derive(Debug)]
-struct DecimalMeta{
-    compressed_byte_map: [usize; 10],
-    uncompressed_integers: usize,
-    uncompressed_decimals: usize,
-    compressed_integers: usize,
-    compressed_decimals: usize,
-    bytes_to_read: usize
+pub struct DecimalMeta{
+    pub compressed_byte_map: [usize; 10],
+    pub uncompressed_integers: usize,
+    pub uncompressed_decimals: usize,
+    pub compressed_integers: usize,
+    pub compressed_decimals: usize,
+    pub bytes_to_read: usize
 }
 impl DecimalMeta{
-    fn new(precision: u8, decimal: u8) -> DecimalMeta{
-        let DECIMAL_DIGITS_PER_INTEGER = 9;
+    pub fn new(precision: u8, decimal: u8) -> DecimalMeta{
+        let decimal_digits_per_integer = 9;
         let compressed_byte_map = [0usize, 1, 1, 2, 2, 3, 3, 4, 4, 4];
         let integral = precision - decimal;
-        let uncompressed_integers: usize = (integral / DECIMAL_DIGITS_PER_INTEGER).into();
-        let uncompressed_decimals: usize = (decimal / DECIMAL_DIGITS_PER_INTEGER).into();
-        let compressed_integers: usize = integral as usize - (uncompressed_integers * DECIMAL_DIGITS_PER_INTEGER as usize);
-        let compressed_decimals: usize = decimal as usize - (uncompressed_decimals * DECIMAL_DIGITS_PER_INTEGER as usize);
+        let uncompressed_integers: usize = (integral / decimal_digits_per_integer).into();
+        let uncompressed_decimals: usize = (decimal / decimal_digits_per_integer).into();
+        let compressed_integers: usize = integral as usize - (uncompressed_integers * decimal_digits_per_integer as usize);
+        let compressed_decimals: usize = decimal as usize - (uncompressed_decimals * decimal_digits_per_integer as usize);
 
         let bytes_to_read: usize = uncompressed_integers * 4 + compressed_byte_map[compressed_integers] + uncompressed_decimals * 4 + compressed_byte_map[compressed_decimals];
         DecimalMeta{
@@ -71,14 +71,14 @@ impl Serialize for Blob {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MySQLValue {
     SignedInteger(i64),
     Float(f32),
     Double(f64),
     String(String),
     Enum(i16),
-    Blob(Blob),
+    Blob(Vec<u8>),
     Year(u32),
     Date { year: u32, month: u32, day: u32 },
     Time { hours: u32, minutes: u32, seconds: u32, subseconds: u32},
@@ -108,18 +108,18 @@ variable_part:
 The The data first length of the varchar type more than 255 are 2 bytes
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RowValue{
-    pub(crate) rows: Vec<Vec<Option<MySQLValue>>>,
+    pub(crate) rows: Vec<Vec<Option<MySQLValue>>>
 }
 
-fn is_null(null_bytes: &Vec<u8>, pos: &usize) -> u8 {
+pub fn is_null(null_bytes: &Vec<u8>, pos: &usize) -> u8 {
     let idx = (pos / 8) as usize;
     let bit = null_bytes[idx];
     return bit & (1 << (pos % 8));
 }
 impl RowValue{
-    pub fn read_row_value<R: Read+Seek>(buf: &mut R, map: &TableMap, header: &EventHeader) -> RowValue {
+    pub fn read_row_value<R: Read+Seek>(buf: &mut R, map: &TableMap, header: &EventHeader, read_type: &crate::meta::ReadType) -> RowValue {
         let row_event_fix = 8;
         buf.seek(io::SeekFrom::Current(row_event_fix)).unwrap();
         let extra_len = buf.read_u16::<LittleEndian>().unwrap();
@@ -150,20 +150,29 @@ impl RowValue{
             let mut row: Vec<Option<MySQLValue>> = vec![];
             let columns = map.column_info.len();
             for idx in 0..columns {
-                //println!("{},{:?},{},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),null_bit.len(),columns_length);
+                //println!("{},{:?},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),header.event_length);
                 let value= if is_null(&null_bit.to_vec(), &idx) > 0{
                     MySQLValue::Null
                 } else {
                     Self::parsevalue(buf, &map.column_info[idx].column_type, &map.column_info[idx].column_meta)
 
-
                 };
                 row.push(Some(value));
             }
             rows.push(row);
-            if (buf.tell().unwrap() + 4) as usize > header.event_length as usize {
-                break;
+            match read_type {
+                crate::meta::ReadType::Repl => {
+                    if (buf.tell().unwrap() + 4) as usize > header.event_length as usize {
+                        break;
+                    }
+                }
+                crate::meta::ReadType::File => {
+                    if (buf.tell().unwrap() + 4) as usize > header.event_length as usize  - 19 {
+                        break;
+                    }
+                }
             }
+
         };
 
         RowValue{
@@ -171,49 +180,49 @@ impl RowValue{
         }
     }
 
-    fn parsevalue<R: Read>(buf: &mut R, type_code: &ColumnTypeDict, col_meta: &Vec<usize>) -> MySQLValue{
+    fn parsevalue<R: Read + Tell>(buf: &mut R, type_code: &ColumnTypeDict, col_meta: &Vec<usize>) -> MySQLValue{
         match type_code {
-            ColumnTypeDict::MYSQL_TYPE_TINY => {
+            ColumnTypeDict::MysqlTypeTiny => {
                 MySQLValue::SignedInteger(buf.read_i8().unwrap() as i64)
             }
-            ColumnTypeDict::MYSQL_TYPE_SHORT => {
+            ColumnTypeDict::MysqlTypeShort => {
                 MySQLValue::SignedInteger(buf.read_i16::<LittleEndian>().unwrap() as i64)
             }
-            ColumnTypeDict::MYSQL_TYPE_INT24 => {
+            ColumnTypeDict::MysqlTypeInt24 => {
                 MySQLValue::SignedInteger(buf.read_i24::<LittleEndian>().unwrap() as i64)
             }
-            ColumnTypeDict::MYSQL_TYPE_LONG => {
+            ColumnTypeDict::MysqlTypeLong => {
                 MySQLValue::SignedInteger(buf.read_i32::<LittleEndian>().unwrap() as i64)
             }
-            ColumnTypeDict::MYSQL_TYPE_LONGLONG => {
+            ColumnTypeDict::MysqlTypeLonglong => {
                 MySQLValue::SignedInteger(buf.read_i64::<LittleEndian>().unwrap() as i64)
             }
-            ColumnTypeDict::MYSQL_TYPE_NEWDECIMAL => {
+            ColumnTypeDict::MysqlTypeNewdecimal => {
                 let decimal_meta = DecimalMeta::new(col_meta[0] as u8, col_meta[1] as u8);
                 let mut value_buf = vec![0u8; decimal_meta.bytes_to_read];
                 buf.read_exact(&mut value_buf).unwrap();
                 match Self::read_new_decimal(&value_buf.to_vec(), &decimal_meta) {
-                    Ok(T) => MySQLValue::Decimal(T),
+                    Ok(t) => MySQLValue::Decimal(t),
                     Err(e) => {
                         println!("decimal 解析错误: {}",e);
                         MySQLValue::Null
                     }
                 }
             }
-            ColumnTypeDict::MYSQL_TYPE_DOUBLE |
-            ColumnTypeDict::MYSQL_TYPE_FLOAT => {
+            ColumnTypeDict::MysqlTypeDouble |
+            ColumnTypeDict::MysqlTypeFloat => {
                 match col_meta[0] {
                     8 => MySQLValue::Double(buf.read_f64::<LittleEndian>().unwrap() as f64),
                     4 => MySQLValue::Float(buf.read_f32::<LittleEndian>().unwrap() as f32),
                     _ => MySQLValue::Null
                 }
             }
-            ColumnTypeDict::MYSQL_TYPE_TIMESTAMP2 => {
+            ColumnTypeDict::MysqlTypeTimestamp2 => {
                 let whole_part = buf.read_i32::<BigEndian>().unwrap();
                 let frac_part = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
                 MySQLValue::Timestamp { unix_time: whole_part, subsecond: frac_part }
             }
-            ColumnTypeDict::MYSQL_TYPE_DATETIME2 => {
+            ColumnTypeDict::MysqlTypeDatetime2 => {
                 /*
                 DATETIME
                 1 bit  sign           (1= non-negative, 0= negative)
@@ -241,10 +250,10 @@ impl RowValue{
                 let second = (tmp_buf[4] & 0x3f) as u32;
                 MySQLValue::DateTime { year, month, day, hour, minute, second, subsecond }
             }
-            ColumnTypeDict::MYSQL_TYPE_YEAR => {
+            ColumnTypeDict::MysqlTypeYear => {
                 MySQLValue::Year(buf.read_u8().unwrap() as u32 + 1900)
             }
-            ColumnTypeDict::MYSQL_TYPE_DATE => {
+            ColumnTypeDict::MysqlTypeDate => {
                 let value = buf.read_u24::<LittleEndian>().unwrap();
                 let year = (value & ((1 << 15) - 1) << 9) >> 9;
                 let month = (value & ((1 << 4) - 1) << 5) >> 5;
@@ -255,7 +264,7 @@ impl RowValue{
                 else { MySQLValue::Date {year, month, day} }
 
             }
-            ColumnTypeDict::MYSQL_TYPE_TIME2 => {
+            ColumnTypeDict::MysqlTypeTime2 => {
                 /*
                 TIME encoding for nonfractional part:
 
@@ -275,36 +284,38 @@ impl RowValue{
                 let frac_part = Self::read_datetime_fsp(buf, col_meta[0] as u8).unwrap();
                 MySQLValue::Time { hours, minutes, seconds, subseconds: frac_part }
             }
-            ColumnTypeDict::MYSQL_TYPE_VARCHAR |
-            ColumnTypeDict::MYSQL_TYPE_VAR_STRING |
-            ColumnTypeDict::MYSQL_TYPE_BLOB |
-            ColumnTypeDict::MYSQL_TYPE_TINY_BLOB |
-            ColumnTypeDict::MYSQL_TYPE_LONG_BLOB |
-            ColumnTypeDict::MYSQL_TYPE_MEDIUM_BLOB |
-            ColumnTypeDict::MYSQL_TYPE_SET |
-            ColumnTypeDict::MYSQL_TYPE_BIT => {
+            ColumnTypeDict::MysqlTypeVarString |
+            ColumnTypeDict::MysqlTypeVarchar |
+            ColumnTypeDict::MysqlTypeBlob |
+            ColumnTypeDict::MysqlTypeTinyBlob |
+            ColumnTypeDict::MysqlTypeLongBlob |
+            ColumnTypeDict::MysqlTypeMediumBlob |
+            ColumnTypeDict::MysqlTypeBit => {
                 let var_length =  Self::read_str_value_length(buf, &col_meta[0]);
                 let mut pack = vec![0u8; var_length];
                 buf.read_exact(&mut pack).unwrap();
-                MySQLValue::Blob(Blob::from(pack.to_vec()))
+                MySQLValue::Blob(pack)
             }
-            ColumnTypeDict::MYSQL_TYPE_JSON => {
+            ColumnTypeDict::MysqlTypeJson => {
                 let value_length = Self::read_str_value_length(buf, &col_meta[0]);
                 MySQLValue::Json(jsonb::read_binary_json(buf, &value_length))
 
             }
-            ColumnTypeDict::MYSQL_TYPE_STRING => {
+            ColumnTypeDict::MysqlTypeString => {
                 let mut value_length = 0;
+                //println!("aa:{},{}",col_meta[0],buf.tell().unwrap());
                 if col_meta[0] <= 255 {
                     value_length = buf.read_u8().unwrap() as usize;
                 }
                 else {
                     value_length = buf.read_u16::<LittleEndian>().unwrap() as usize;
                 }
-                let value = readvalue::read_string_value_from_len(buf,value_length);
-                MySQLValue::String(value)
+                let mut pack = vec![0u8; value_length];
+                buf.read_exact(&mut pack).unwrap();
+                MySQLValue::Blob(pack)
             }
-            ColumnTypeDict::MYSQL_TYPE_ENUM => {
+            ColumnTypeDict::MysqlTypeEnum |
+            ColumnTypeDict::MysqlTypeSet => {
                 match col_meta[0] {
                     1 => {
                         let v = buf.read_u8().unwrap();

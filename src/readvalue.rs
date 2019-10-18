@@ -21,7 +21,7 @@ pub fn read_string_value_from_len<R: Read, S: Into<usize>>(buf: &mut R,num: S) -
 
 pub fn read_string_value(pack: &[u8]) -> String{
     match from_utf8(pack) {
-        Ok(T) => T.parse().unwrap(),
+        Ok(t) => t.parse().unwrap(),
         Err(e) => {
             println!("{:?}", e);
             String::from("")
@@ -74,7 +74,7 @@ pub fn read_u48(pack: &[u8]) -> usize {
 }
 
 pub fn read_u56(pack: &[u8]) -> usize {
-    let mut a = pack[0] as usize;
+    let a = pack[0] as usize;
     let b = read_u16(&pack[1..3]) as usize;
     let c = read_u32(&pack[3..]) as usize;
     a + (b << 8) + (c << 24)

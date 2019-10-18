@@ -5,42 +5,55 @@
 
 use std::net::TcpStream;
 use crate::{replication, Config, readvalue, io};
-use crate::io::{response,pack,socketio};
+use crate::io::{response,socketio};
 use std::process;
+use serde_json::from_str;
+use std::io::{BufReader, Seek, SeekFrom};
+use std::fs::File;
 
 pub mod readbinlog;
 pub mod readevent;
 pub mod parsevalue;
 pub mod jsonb;
+pub mod rollback;
 
 pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
-    check_sum(conn);
-
-    let mut regist_pack= vec![];
-    if conf.gtid.len() > 0 {
-        regist_pack = gtid_dump_pack(conf);
-    }else if conf.binlogfile.len() > 0 {
-        regist_pack = binlog_dump_pack(conf);
-    } else {
-        println!("主从同步配置项错误，gtid/binlog模式必须给定其一的参数");
-        process::exit(1);
+    let version = get_version(conn);
+    if conf.runtype == String::from("repl"){
+        check_sum(conn);
+        let mut regist_pack= vec![];
+        if conf.gtid.len() > 0 {
+            regist_pack = gtid_dump_pack(conf);
+        }else if conf.binlogfile.len() > 0 {
+            regist_pack = binlog_dump_pack(conf);
+        } else {
+            println!("主从同步配置项错误，gtid/binlog模式必须给定其一的参数");
+            process::exit(1);
+        }
+        socketio::write_value(conn, &regist_pack).unwrap_or_else(|err|{
+            println!("{}",err);
+            process::exit(1);
+        });
+        replication::readbinlog::readbinlog(conn, conf,&version);
+    }else if conf.runtype == String::from("file") {
+        let f = File::open(&conf.file).unwrap_or_else(|err|{
+            println!("创建文件({})访问发生错误:{}",conf.file, err);
+            process::exit(1);
+        });
+        let mut reader = BufReader::new(f);
+        if conf.startposition.len() > 0 {
+            reader.seek(SeekFrom::Current(conf.startposition.parse().unwrap()));
+        }else { reader.seek(SeekFrom::Current(4)); }
+        replication::readbinlog::readbinlog_fromfile(conf, &version, &mut reader)
     }
-    socketio::write_value(conn, &regist_pack).unwrap_or_else(|err|{
-        println!("{}",err);
-        process::exit(1);
-    });
 
-//    use std::{thread, time};
-//    let ten_millis = time::Duration::from_secs(100);
-//    thread::sleep(ten_millis);
-    replication::readbinlog::readbinlog(conn, conf);
 }
 
 fn check_sum(conn: &mut TcpStream) {
     let sql = String::from("select @@BINLOG_CHECKSUM as checksum;");
     let values = io::command::execute(conn,&sql);
     for row in values.iter(){
-        for (key, value) in row{
+        for (_, value) in row{
             if value.len() > 0 {
                 let sql = String::from("set @master_binlog_checksum= @@global.binlog_checksum;");
                 io::command::execute_update(conn,&sql);
@@ -48,6 +61,19 @@ fn check_sum(conn: &mut TcpStream) {
             }
         }
     }
+}
+
+fn get_version(conn: &mut TcpStream) -> u8 {
+    let sql = String::from("select @@version;");
+    let mut v = 0 as u8;
+    let values = io::command::execute(conn,&sql);
+    for row in values.iter(){
+        for (_, value) in row{
+            let a: Vec<&str> = value.split(".").collect();
+            v = from_str::<u8>(a[0]).unwrap();
+        }
+    }
+    v
 }
 
 /*
@@ -185,7 +211,6 @@ impl GtidSet{
         let mut intervals: Vec<GtidIntervals>= vec![];
         let gtid_info: Vec<&str> = gtid.split(":").collect();
         let sid = gtid_info[0].parse().unwrap();
-        let inter_len = gtid_info.len() -1;
         for (idx,interval) in gtid_info.iter().enumerate(){
             if idx > 0{
                 intervals.push(GtidIntervals::new(interval));

@@ -5,6 +5,7 @@
 
 pub mod readvalue;
 pub mod meta;
+pub mod stdout;
 pub mod io;
 pub mod replication;
 use std::str;
@@ -12,29 +13,30 @@ use std::process;
 
 
 use structopt::StructOpt;
+use std::net::TcpStream;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
 pub struct Opt {
-    #[structopt(short = "u", long = "user",help = "用户名")]
+    #[structopt(long = "runtype",help = "程序运行模式, [repl: 模拟slave获取binlog数据, mha: 高可用管理模式, monitor: 实时监控mysql运行状态, command: 执行sql语句, file: 从binlog文件获取数据, databus: 同步数据到其他db]")]
+    pub runtype: Option<String>,
+
+    #[structopt(short = "u", long = "user",help = "mysql用户名")]
     pub user: Option<String>,
 
-    #[structopt(short = "p", long = "password",help = "密码")]
+    #[structopt(short = "p", long = "password",help = "mysql密码")]
     pub password: Option<String>,
 
     #[structopt(short = "h",long = "host", help="ip地址加端口, ip:port 例如127.0.0.1:3306")]
     pub host: Option<String>,
 
-    #[structopt(short = "D",long = "database", help="库名")]
+    #[structopt(short = "D",long = "database", help="执行sql语句时连接的默认数据库")]
     pub database: Option<String>,
 
     #[structopt(short = "c",long = "command", help="sql语句")]
     pub command: Option<String>,
 
-    #[structopt(short = "r",long = "repltype", help="获取binlog模式[repl,file]，也可不设置，用于程序建传递")]
-    pub repltype: Option<String>,
-
-    #[structopt(short = "f",long = "file", help="binlog文件，用于文件读取")]
+    #[structopt(short = "f",long = "file", help="binlog文件，用于文件读取与配置文件的指定")]
     pub file: Option<String>,
 
     #[structopt(long = "binlogfile", help="binlog文件名，用于replicaton注册同步")]
@@ -43,31 +45,72 @@ pub struct Opt {
     #[structopt(long = "position", help="注册replication使用的pos")]
     pub position: Option<String>,
 
-    #[structopt(long = "gtid", help="gtid同步模式使用的gtid")]
+    #[structopt(long = "gtid", help="作用于gtid同步模式使用的gtid或者从文件读取时需要过滤的gtid")]
     pub gtid: Option<String>,
 
-    #[structopt(long = "conntype", help="连接操作类型，repl、command 分别对应slave同步和执行sql")]
-    pub conntype: Option<String>,
-
-    #[structopt(long = "serverid", help="注册用的server_id，不能与已经存在的同步线程重复")]
+    #[structopt(long = "serverid", help="注册用的server_id，不能与已经存在的同步线程重复, 默认为133")]
     pub serverid: Option<String>,
+
+    #[structopt(long = "getsql", help="从binlog文件或者数据流中提取sql语句")]
+    pub getsql: bool,
+
+    #[structopt(long = "rollback", help="反转binlog数据为回滚数据，写入二进制文件")]
+    pub rollback: bool,
+
+    #[structopt(long = "statisc", help="统计row_event数据大小")]
+    pub statisc: bool,
+
+    #[structopt(long = "startposition", help="从binlog文件提取数据时的position起始位置")]
+    pub startposition: Option<String>,
+
+    #[structopt(long = "stopposition", help="从binlog文件提取数据时停止的位置")]
+    pub stopposition: Option<String>,
+
+    #[structopt(long = "startdatetime", help="读取binlog文件数据的时间范围(时间戳格式)")]
+    pub startdatetime: Option<String>,
+
+    #[structopt(long = "stopdatetime", help="读取binlog文件数据的时间范围(时间戳格式)")]
+    pub stopdatetime: Option<String>,
+
+    #[structopt(long = "threadid", help="过滤出某个线程id所产生的binlog数据")]
+    pub threadid: Option<String>,
+
+    #[structopt(long = "greptbl", help="过滤出某个表所产生的binlog数据，格式为{'db1':['tb1','tb2'],'db2':[]...}}, 如果要提取一个库的所有表格式为{'db1':'all',....}")]
+    pub greptbl: Option<String>,
+
+    #[structopt(long = "mhaserver", help="做为高可用管理服务端启动, 开启选项需指定配置文件")]
+    pub mhaserver: bool,
+
+    #[structopt(long = "mhaclient", help="做为高可用客户端启动, 与mysql实例在同一节点上, 开启需指定配置文件")]
+    pub mhaclient: bool,
+
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
+    pub runtype: String,
     pub host_info: String,
     pub user_name: String,
     pub password: String,
     pub database: String,
     pub program_name: String,
     pub command: String,
-    pub repltype: String,
     pub file: String,
     pub binlogfile: String,
     pub position: String,
     pub gtid: String,
-    pub conntype: String,
-    pub serverid: String
+    pub serverid: String,
+    pub getsql: bool,
+    pub rollback: bool,
+    pub mhaserver: bool,
+    pub mhaclient: bool,
+    pub statisc: bool,
+    pub startposition: String,
+    pub stopposition: String,
+    pub startdatetime: String,
+    pub stopdatetime: String,
+    pub threadid: String,
+    pub greptbl: String,
 }
 
 impl Config{
@@ -77,13 +120,51 @@ impl Config{
         let mut password = String::from("");
         let mut database = String::from("");
         let mut command = String::from("");
-        let mut repltype= String::from("");
         let mut file = String::from("");
         let mut binlogfile = String::from("");
         let mut position = String::from("");
         let mut gtid = String::from("");
-        let mut conntype = String::from("");
+        let mut runtype = String::from("");
         let mut serverid = String::from("");
+        let getsql = args.getsql;
+        let rollback = args.rollback;
+        let mhaserver = args.mhaserver;
+        let mhaclient = args.mhaclient;
+        let statisc = args.statisc;
+        let mut startposition = String::from("");
+        let mut stopposition = String::from("");
+        let mut startdatetime = String::from("");
+        let mut stopdatetime = String::from("");
+        let mut threadid = String::from("");
+        let mut greptbl = String::from("");
+
+
+        match args.startposition {
+            None => {},
+            Some(t) => startposition = t,
+        }
+
+        match args.stopposition {
+            None => {},
+            Some(t) => stopposition = t,
+        }
+        match args.startdatetime {
+            None => {},
+            Some(t) => startdatetime = t,
+        }
+        match args.stopdatetime {
+            None => {},
+            Some(t) => stopdatetime = t,
+        }
+        match args.threadid {
+            None => {},
+            Some(t) => threadid = t,
+        }
+        match args.greptbl {
+            None => {},
+            Some(t) => greptbl = t,
+        }
+
         match args.user {
             None => {
                 return Err("user 不能为空！！");
@@ -115,11 +196,6 @@ impl Config{
             Some(t) => command = t,
         }
 
-        match args.repltype {
-            None => (),
-            Some(t) => repltype = t,
-        }
-
         match args.file {
             None => (),
             Some(t) => file = t,
@@ -140,40 +216,41 @@ impl Config{
             Some(t) => gtid = t,
         }
 
-        match args.conntype {
+        match args.runtype {
             None => (),
-            Some(t) => conntype = t,
+            Some(t) => runtype = t,
         }
 
         match args.serverid {
-            None => (),
+            None => (serverid = 133.to_string()),
             Some(t) => serverid = t,
         }
 
 
-        Ok(Config { program_name:String::from("rust_test"),
-            host_info, user_name ,
-            password, database,serverid,
-            command,repltype,file,binlogfile,position,gtid,conntype})
+        Ok(Config { program_name:String::from("rust_test"),statisc,
+            host_info, user_name ,getsql,rollback,startposition,stopposition,
+            password, database,serverid,startdatetime,stopdatetime,threadid,greptbl,
+            command,file,binlogfile,position,gtid,runtype,mhaserver,mhaclient})
     }
 }
 
 pub fn startop(config: &Config) {
-    let mut conn = io::connection::create_mysql_conn(config).unwrap_or_else(|err|{
-        println!("创建连接时发生错误: {}",err);
-        process::exit(1);
-    }) ;  //创建连接
-
-    if config.conntype == String::from("command"){
-        //let sql = String::from("show master status");
+    if config.runtype == String::from("command"){
+        let mut conn = create_conn(config);
         let values = io::command::execute(&mut conn,&config.command);
         for row in values.iter(){
             println!("{:#?}",row);
         }
-    }else if config.conntype == String::from("repl") {
+    }else if config.runtype == String::from("repl") {
+        let mut conn = create_conn(config);
         replication::repl_register(&mut conn,&config);
+    }else if config.runtype == String::from("file") {
+        println!("从binlog文件提取数据");
+        let mut conn = create_conn(config);
+        replication::repl_register(&mut conn,config);
+
     }else {
-        println!("无效的执行参数conntype: {}, --help提供参考",config.conntype);
+        println!("无效的执行参数runtype: {}, --help提供参考",config.runtype);
     }
 
 
@@ -185,9 +262,14 @@ pub fn startop(config: &Config) {
 }
 
 
+fn create_conn(config: &Config) -> TcpStream {
+    let conn = io::connection::create_mysql_conn(config).unwrap_or_else(|err|{
+        println!("创建连接时发生错误: {}",err);
+        process::exit(1);
+    }) ;  //创建连接
 
-
-
+    return conn;
+}
 
 
 

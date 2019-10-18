@@ -4,8 +4,9 @@
 */
 use crate::readvalue;
 use std::net::TcpStream;
-use std::io::{Read, Write};
+use std::io::{Read, Write, BufReader};
 use std::error::Error;
+use std::fs::File;
 
 //包头部分
 #[derive(Debug)]
@@ -62,7 +63,7 @@ pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader)
     let (mut buf,header) = get_from_stream(stream);
     while header.payload == 0xffffff{
         println!("{}",header.payload);
-        let (buf_tmp,header) = get_from_stream(stream);
+        let (buf_tmp,_) = get_from_stream(stream);
         buf.extend(buf_tmp);
     }
     (buf, header)
