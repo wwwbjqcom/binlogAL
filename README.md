@@ -7,8 +7,8 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 # 功能
 
  1. 可直接命令行执行sql语句
- 2. 可以对binlog进行解析、过滤 
- 3. 可以反转binlog为回滚语句 
+ 2. 可以对binlog进行解析、过滤 、统计
+ 3. 可以反转binlog为回滚日志 
  4. 可以提取binlog数据为sql语句 
 
 
@@ -43,7 +43,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 	statiac: 统计每个事务大小
 	
 ### 回滚：
-	1、只能从binlog文件获取， 可配置项通用， 只是直接把数据写入到rollback.log中
+	1、只能从binlog文件获取，直接把回滚数据写入到rollback.log中，同binlog日志格式
 	2、默认以1G做为单个文件最大值
 	3、事务顺序倒叙生成
 	4、可直接使用mysqlbinlog进行操作恢复也可以直接用工具提取sql恢复
