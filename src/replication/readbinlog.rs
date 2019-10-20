@@ -138,7 +138,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
     //首先获取文件大小
     reader.seek(SeekFrom::End(0));
     let reader_size = reader.tell().unwrap();
-    reader.seek(SeekFrom::Start(4));
+    //reader.seek(SeekFrom::Start(4));
     //
 
     let mut tabl_map = readevent::TableMap::new();
@@ -146,7 +146,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
     let mut db_tbl = String::from("");
 
     //回滚变量设置
-    let mut rollback_trac = RollBackTrac::new();
+    let mut rollback_trac = RollBackTrac::new(reader, conf);
     let mut tmp_traction: Vec<u8> = vec![];
     let mut rollback_traction: Vec<u8> = vec![]; //存放从gtid_event到xid_event一个完整的事务
 
@@ -209,7 +209,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         });
         if conf.rollback{
 
-            tmp_traction.extend(header_buf.clone());
+            rollback_trac.cur_event.extend(header_buf.clone());
         }
         let mut cur = Cursor::new(header_buf);
         let event_header: EventHeader = readevent::InitHeader::new(&mut cur,conf);
@@ -218,9 +218,9 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         let mut payload_buf = vec![0u8; payload];
         reader.read_exact(payload_buf.as_mut());
         if conf.rollback{
-            tmp_traction.extend(payload_buf.clone());
+            rollback_trac.cur_event.extend(payload_buf.clone());
             match event_header.type_code {
-                readevent::BinlogEvent::GtidEvent => {rollback_traction = vec![]}
+                readevent::BinlogEvent::GtidEvent => {rollback_trac.rollback_traction = vec![]}
                 _ => {}
             }
         }
@@ -229,7 +229,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         //判断position和datetime过滤情况
         match event_header.type_code {
             readevent::BinlogEvent::UNKNOWNEVENT => {
-                tmp_traction = vec![];
+                rollback_trac.cur_event = vec![];
                 continue 'all;
             }
             _ => {
@@ -243,7 +243,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                                 match grep_status_info.grep_date_time{
                                     CheckGrepStatus::GrepDateTime { state, start_time, stop_time } => {
                                         if start_time > event_header.timestamp as usize {
-                                            tmp_traction = vec![];
+                                            rollback_trac.cur_event = vec![];
                                             continue 'all;
                                         }else {
                                             if stop_time < event_header.timestamp as usize {
@@ -280,7 +280,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         //
         check_status = check_repl_grep_status(&grep_threadid_info, &grep_tbl_info,&event_header);
         if !check_status {
-            tmp_traction = vec![];
+            rollback_trac.cur_event = vec![];
             continue;
         };
         let mut data = Traction::Unknown;
@@ -293,7 +293,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                             gtid_traction = Traction::GtidEvent(readevent::GtidEvent::read_event( &event_header, &mut cur, version));
                         }
                         _ => {
-                            tmp_traction = vec![];
+                            rollback_trac.cur_event = vec![];
                             continue 'all;
                         }
                     }
@@ -324,14 +324,14 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                                 }
                             }
                             else {
-                                tmp_traction = vec![];
-                                rollback_traction = vec![];
+                                rollback_trac.cur_event = vec![];
+                                rollback_trac.rollback_traction = vec![];
                                 continue 'all;
                             }
                         }
                         _ => {
-                            tmp_traction = vec![];
-                            rollback_traction = vec![];
+                            rollback_trac.cur_event = vec![];
+                            rollback_trac.rollback_traction = vec![];
                             continue 'all;
                         }
                     }
@@ -366,15 +366,15 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                                             break 'inner;
                                         }
                                     }else {
-                                        tmp_traction = vec![];
-                                        rollback_traction = vec![];
+                                        rollback_trac.cur_event = vec![];
+                                        rollback_trac.rollback_traction = vec![];
                                         continue 'all;
                                     }
                                 }
                             }
                             else {
-                                tmp_traction = vec![];
-                                rollback_traction = vec![];
+                                rollback_trac.cur_event = vec![];
+                                rollback_trac.rollback_traction = vec![];
                                 continue 'all;
                             }
                         }
@@ -390,7 +390,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             readevent::BinlogEvent::DeleteEvent |
             readevent::BinlogEvent::WriteEvent => {
                 if conf.rollback{
-                    rollback_traction.extend(rollback::rollback_row_event(&tmp_traction, &event_header, &tabl_map));
+                    rollback_trac.rollback_traction.extend(rollback::rollback_row_event(&rollback_trac.cur_event, &event_header, &tabl_map));
 
                 } else if conf.statisc{
                     data = Traction::RowEventStatic{type_code: event_header.type_code.clone(),count:event_header.event_length as usize};
@@ -412,7 +412,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             },
             readevent::BinlogEvent::XAPREPARELOGEVENT => {},
             readevent::BinlogEvent::UNKNOWNEVENT => {
-                tmp_traction = vec![];
+                rollback_trac.cur_event = vec![];
                 continue 'all;
             }
             readevent::BinlogEvent::RotateLogEvent => {
@@ -427,14 +427,14 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         }else {
             match event_header.type_code {
                 readevent::BinlogEvent::XidEvent => {
-                    rollback_traction.extend(tmp_traction.clone());
-                    let tra_len = rollback_traction.len();
-                    rollback_trac.events.push(rollback_traction.clone());
+                    rollback_trac.rollback_traction.extend(rollback_trac.cur_event.clone());
+                    let tra_len = rollback_trac.rollback_traction.len();
+                    rollback_trac.events.push(rollback_trac.rollback_traction.clone());
                     rollback_trac.count += tra_len;
                     if rollback_trac.check_file_size(){
                         rollback_trac = rollback_trac.update();
                     }
-                    rollback_traction = vec![];
+                    rollback_trac.rollback_traction = vec![];
                 }
                 readevent::BinlogEvent::WriteEvent|
                 readevent::BinlogEvent::UpdateEvent|
@@ -442,10 +442,10 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
 
                 }
                 _ => {
-                    rollback_traction.extend(tmp_traction.clone());
+                    rollback_trac.rollback_traction.extend(rollback_trac.cur_event.clone());
                 }
             }
-            tmp_traction= vec![];
+            rollback_trac.cur_event= vec![];
         }
     }
 }

@@ -5,27 +5,55 @@
 
 
 use std::fs::File;
-use std::io::{Seek, SeekFrom, Write, Cursor, Read};
-use crate::replication::readevent::{EventHeader, BinlogEvent, TableMap, Tell};
+use std::io::{Seek, SeekFrom, Write, Cursor, Read, BufReader};
+use crate::replication::readevent::{EventHeader, BinlogEvent, TableMap, Tell, InitHeader};
 use byteorder::{ReadBytesExt, LittleEndian};
 use crate::meta::ColumnTypeDict;
 use crate::{readvalue, Config};
 use std::env::set_var;
+use crate::replication::readevent;
 
 
 #[derive(Debug)]
 pub struct RollBackTrac{
+    pub desc_event: Vec<u8>,
     pub count: usize,
     pub events: Vec<Vec<u8>>,
-    pub file_seq: usize
+    pub file_seq: usize,
+    pub desc_format: Vec<u8>,
+    pub cur_event: Vec<u8>,
+    pub rollback_traction: Vec<u8>,
 }
 impl RollBackTrac {
-    pub fn new() -> RollBackTrac{
+    pub fn new(reader: &mut BufReader<File>,conf: & Config) -> RollBackTrac{
+        let desc_format = Self::get_desc_format_event(reader,conf);
+        if conf.startposition.len() > 0 {
+            reader.seek(SeekFrom::Start(conf.startposition.parse().unwrap()));
+        }
         RollBackTrac{
+            desc_event: vec![],
             count: 0,
             events: vec![],
-            file_seq: 1
+            file_seq: 1,
+            desc_format,
+            cur_event: vec![],
+            rollback_traction: vec![]
         }
+    }
+
+    fn get_desc_format_event(reader: &mut BufReader<File>,conf: &Config) -> Vec<u8> {
+        reader.seek(SeekFrom::Start(4));
+        let mut desc_format: Vec<u8> = vec![];
+        let mut header_buf = vec![0u8; 19];
+        reader.read_exact(header_buf.as_mut()).unwrap();
+        desc_format.extend(header_buf.clone());
+        let mut cur = Cursor::new(header_buf);
+        let event_header: EventHeader = readevent::EventHeader::new(&mut cur,conf);
+        let payload = event_header.event_length as usize - event_header.header_length as usize;
+        let mut payload_buf = vec![0u8; payload];
+        reader.read_exact(payload_buf.as_mut()).unwrap();
+        desc_format.extend(payload_buf);
+        desc_format
     }
 
     pub fn get_rollbak_file(files_seq: usize) -> File {
@@ -43,6 +71,7 @@ impl RollBackTrac {
         let mut write_file = Self::get_rollbak_file(self.file_seq);
         let a = [0xFE,0x62,0x69,0x6E];
         write_file.write_all(&a)?;
+        write_file.write_all(&self.desc_format);
         let tracs = self.events.len();
         let count = self.count;
         let mut a = vec![0; tracs];
@@ -69,11 +98,16 @@ impl RollBackTrac {
 
     pub fn update(&self) -> RollBackTrac {
         let file_seq = self.file_seq + 1;
+        let desc_format = self.desc_format.clone();
         let write_file = Self::get_rollbak_file(file_seq);
         RollBackTrac{
+            desc_event: self.desc_event.clone(),
             count: 0,
             events: vec![],
-            file_seq
+            file_seq,
+            desc_format,
+            cur_event: vec![],
+            rollback_traction: vec![]
         }
     }
 }

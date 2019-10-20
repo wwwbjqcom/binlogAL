@@ -28,6 +28,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 	threadid： 想提取某个线程id产生的数据时，配置该选项
 	greptbl： 提取某个表或者某些表产生的数据，格式见--help
 	getsql： 提取为sql语句
+	statiac: 统计每个事务大小
 	
 ### 读取binlog文件:
 	file: 指定binlog文件
@@ -39,6 +40,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 	threadid: 提取某个线程id产生的数据
 	greptbl: 提取某些表产生的数据
 	gtid: 在该模式下配置gtid，则为提取对于gtid的数据
+	statiac: 统计每个事务大小
 	
 ### 回滚：
 	1、只能从binlog文件获取， 可配置项通用， 只是直接把数据写入到rollback.log中

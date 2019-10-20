@@ -41,9 +41,9 @@ pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
             process::exit(1);
         });
         let mut reader = BufReader::new(f);
-        if conf.startposition.len() > 0 {
-            reader.seek(SeekFrom::Current(conf.startposition.parse().unwrap()));
-        }else { reader.seek(SeekFrom::Current(4)); }
+//        if conf.startposition.len() > 0 {
+//            reader.seek(SeekFrom::Current(conf.startposition.parse().unwrap()));
+//        }else { reader.seek(SeekFrom::Current(4)); }
         replication::readbinlog::readbinlog_fromfile(conf, &version, &mut reader)
     }
 
