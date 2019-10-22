@@ -84,6 +84,9 @@ pub struct Opt {
     #[structopt(long = "mhaclient", help="做为高可用客户端启动, 与mysql实例在同一节点上, 开启需指定配置文件")]
     pub mhaclient: bool,
 
+    #[structopt(long = "rfilesize", help="单个回滚日志文件大小, 可以不用设置, 默认1G, 设置值是以字节为单位")]
+    pub rfilesize: Option<String>,
+
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +114,7 @@ pub struct Config {
     pub stopdatetime: String,
     pub threadid: String,
     pub greptbl: String,
+    pub rfilesize: String,
 }
 
 impl Config{
@@ -137,7 +141,12 @@ impl Config{
         let mut stopdatetime = String::from("");
         let mut threadid = String::from("");
         let mut greptbl = String::from("");
+        let mut rfilesize = String::from("");
 
+        match args.rfilesize {
+            None => {},
+            Some(t) => rfilesize = t,
+        }
 
         match args.startposition {
             None => {},
@@ -227,7 +236,7 @@ impl Config{
         }
 
 
-        Ok(Config { program_name:String::from("rust_test"),statisc,
+        Ok(Config { program_name:String::from("rust_test"),statisc,rfilesize,
             host_info, user_name ,getsql,rollback,startposition,stopposition,
             password, database,serverid,startdatetime,stopdatetime,threadid,greptbl,
             command,file,binlogfile,position,gtid,runtype,mhaserver,mhaclient})

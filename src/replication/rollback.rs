@@ -23,10 +23,24 @@ pub struct RollBackTrac{
     pub desc_format: Vec<u8>,
     pub cur_event: Vec<u8>,
     pub rollback_traction: Vec<u8>,
+    pub rfilesize: usize,
+    pub rollback: bool,
 }
 impl RollBackTrac {
     pub fn new(reader: &mut BufReader<File>,conf: & Config) -> RollBackTrac{
-        let desc_format = Self::get_desc_format_event(reader,conf);
+        let mut desc_format = vec![];
+        let mut rfilesize = 0;
+        let mut rollback = false;
+        if conf.rollback {
+            rollback = true;
+            desc_format = Self::get_desc_format_event(reader,conf);
+            if conf.rfilesize.len()> 0 {
+                rfilesize = conf.rfilesize.parse().unwrap();
+            }
+        }
+        else {
+            reader.seek(SeekFrom::Start(4));
+        }
         if conf.startposition.len() > 0 {
             reader.seek(SeekFrom::Start(conf.startposition.parse().unwrap()));
         }
@@ -37,7 +51,9 @@ impl RollBackTrac {
             file_seq: 1,
             desc_format,
             cur_event: vec![],
-            rollback_traction: vec![]
+            rollback_traction: vec![],
+            rfilesize,
+            rollback
         }
     }
 
@@ -46,13 +62,13 @@ impl RollBackTrac {
         let mut desc_format: Vec<u8> = vec![];
         let mut header_buf = vec![0u8; 19];
         reader.read_exact(header_buf.as_mut()).unwrap();
-        desc_format.extend(header_buf.clone());
+        desc_format.extend(&header_buf);
         let mut cur = Cursor::new(header_buf);
         let event_header: EventHeader = readevent::EventHeader::new(&mut cur,conf);
         let payload = event_header.event_length as usize - event_header.header_length as usize;
         let mut payload_buf = vec![0u8; payload];
         reader.read_exact(payload_buf.as_mut()).unwrap();
-        desc_format.extend(payload_buf);
+        desc_format.extend(&payload_buf);
         desc_format
     }
 
@@ -87,8 +103,12 @@ impl RollBackTrac {
 
     //判断
     pub fn check_file_size(&mut self) -> bool {
-        let file_size = 1024 * 1024 * 1024;
+        let mut file_size = 1024 * 1024 * 1024;
+        if self.rfilesize > 0{
+            file_size = self.rfilesize;
+        }
         if self.count > file_size {
+            //println!("{},{}",self.count, file_size);
             self.write_rollback_log();
             return true;
         }else {
@@ -96,18 +116,41 @@ impl RollBackTrac {
         }
     }
 
-    pub fn update(&self) -> RollBackTrac {
-        let file_seq = self.file_seq + 1;
-        let desc_format = self.desc_format.clone();
-        let write_file = Self::get_rollbak_file(file_seq);
-        RollBackTrac{
-            desc_event: self.desc_event.clone(),
-            count: 0,
-            events: vec![],
-            file_seq,
-            desc_format,
-            cur_event: vec![],
-            rollback_traction: vec![]
+    pub fn is_write(&mut self){
+        if self.rollback{
+            self.write_rollback_log();
+        }
+    }
+
+    pub fn append_cur_event(&mut self, buf: &Vec<u8>) {
+        if self.rollback{
+            self.cur_event.extend(buf);
+        }
+    }
+
+    pub fn update(&mut self) {
+        self.file_seq = self.file_seq + 1;
+        self.count = 0;
+        self.rollback_traction = vec![];
+        self.events = vec![];
+    }
+
+    pub fn update_event(&mut self) {
+        if self.rollback{
+            self.rollback_traction = vec![];
+            self.cur_event = vec![];
+        }
+    }
+
+    pub fn init_traction_buf(&mut self) {
+        if self.rollback{
+            self.rollback_traction = vec![];
+        }
+    }
+
+    pub fn delete_cur_event(&mut self){
+        if self.rollback{
+            self.cur_event = vec![];
         }
     }
 }

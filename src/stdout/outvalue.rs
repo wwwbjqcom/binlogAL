@@ -181,10 +181,11 @@ fn print_command(
             let cols = t;
             let mut pri_idex = 0 as usize;          //主键索引
             let mut pri = &String::from("");    //主键名称
+            let mut pri_info: HashMap<String, usize> = HashMap::new();
             for (idx,r) in cols.iter().enumerate(){
-                if r.get("COLUMN_KEY").unwrap().len() > 0 {
+                if r.get("COLUMN_KEY").unwrap() == &String::from("PRI") {
                     pri = r.get("COLUMN_NAME").unwrap();
-                    pri_idex = idx;
+                    pri_info.insert(pri.parse().unwrap(), idx);
                 }
             }
 
@@ -209,7 +210,7 @@ fn print_command(
                     for row in rows{
                         let befor_value = row[0];
                         let after_value = row[1];
-                        let v = crate::stdout::outsql::out_update(befor_value, after_value, cols, pri, pri_idex, map);
+                        let v = crate::stdout::outsql::out_update(befor_value, after_value, cols, &pri_info,map);
                         println!("{}",v);
                     }
                 }
@@ -223,7 +224,7 @@ fn print_command(
                 BinlogEvent::DeleteEvent => {
                     println!("-- Delete Row Value");
                     for row in &row_values.rows {
-                        let v = crate::stdout::outsql::out_delete(row, cols, pri, pri_idex, map);
+                        let v = crate::stdout::outsql::out_delete(row, cols, &pri_info, map);
                         println!("{}",v);
                     }
                 }

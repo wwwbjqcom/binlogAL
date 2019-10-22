@@ -16,6 +16,7 @@ pub mod readevent;
 pub mod parsevalue;
 pub mod jsonb;
 pub mod rollback;
+pub mod grep;
 
 pub fn repl_register(conn: &mut TcpStream, conf: &Config) {
     let version = get_version(conn);

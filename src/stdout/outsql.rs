@@ -18,12 +18,11 @@ enum GetType{
 pub fn out_delete(
     row_value: &Vec<Option<MySQLValue>>,
     table_cols_info: &Vec<HashMap<String, String>>,
-    pri: &String,
-    pri_idex: usize,
+    pri_info: &HashMap<String, usize>,
     map: &TableMap) -> String {
 
     let mut sql = format!("DELETE FROM {}.{} ", map.database_name, map.table_name);
-    let where_str = get_where_str(row_value, table_cols_info, pri, pri_idex);
+    let where_str = get_where_str(row_value, table_cols_info, pri_info);
     sql.push_str(&where_str);
     sql
 }
@@ -146,11 +145,11 @@ pub fn out_update(
     befor_value: &Vec<Option<MySQLValue>>,
     after_value: &Vec<Option<MySQLValue>>,
     table_cols_info: &Vec<HashMap<String, String>>,
-    pri: &String, pri_idex: usize,
+    pri_info: &HashMap<String, usize>,
     map: &TableMap) -> String {
 
     let mut sql = format!("UPDATE {}.{} SET ", map.database_name,map.table_name);
-    let where_str = get_where_str(befor_value, table_cols_info, pri, pri_idex);
+    let where_str = get_where_str(befor_value, table_cols_info, pri_info);
     //String::from("{:?}",befor_value)
     let set_str = get_set_str(after_value, table_cols_info, map);
     sql.push_str(&set_str);
@@ -173,14 +172,32 @@ fn get_set_str(value: &Vec<Option<MySQLValue>>,table_cols_info: &Vec<HashMap<Str
 }
 
 
-fn get_where_str(value: &Vec<Option<MySQLValue>>,table_cols_info: &Vec<HashMap<String, String>>, pri: &String, pri_idex: usize) -> String {
+fn get_where_str(value: &Vec<Option<MySQLValue>>,table_cols_info: &Vec<HashMap<String, String>>, pri_info: &HashMap<String, usize>) -> String {
     let mut where_str = " WHERE ".to_string();
-    if pri.len() > 0 {
-        let value = &value[pri_idex];
-        let col_type = table_cols_info[pri_idex].get("COLUMN_TYPE").unwrap();
-        where_str.push_str(&get_value_str(value, pri, col_type,GetType::GetWhere));
-        where_str.push_str(";");
-    }else {
+    let cols = pri_info.len();
+    if pri_info.len() > 0 {
+        let mut tmp = 1;
+        for (col, idx) in pri_info{
+            let value = &value[*idx];
+            let col_type = table_cols_info[*idx].get("COLUMN_TYPE").unwrap();
+            where_str.push_str(&get_value_str(value, col, col_type,GetType::GetWhere));
+            if tmp < cols{
+                where_str.push_str(" AND ");
+            }
+            else {
+                where_str.push_str(";");
+            }
+            tmp += 1;
+        }
+    }
+
+//    if pri.len() > 0 {
+//        let value = &value[pri_idex];
+//        let col_type = table_cols_info[pri_idex].get("COLUMN_TYPE").unwrap();
+//        where_str.push_str(&get_value_str(value, pri, col_type,GetType::GetWhere));
+//        where_str.push_str(";");
+//    }
+    else {
         let value_len = value.iter().len();
         for (idx, v) in value.iter().enumerate(){
             let col = table_cols_info[idx].get("COLUMN_NAME").unwrap();

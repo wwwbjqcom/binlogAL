@@ -5,7 +5,7 @@
 
 use crate::{Config, replication};
 use std::net::TcpStream;
-use crate::replication::{readevent, parsevalue};
+use crate::replication::{readevent, parsevalue, grep};
 use crate::replication::readevent::{InitValue, EventHeader, InitHeader, Tell};
 use crate::io::{socketio, pack};
 use std::io::{Cursor, Read, Write, Seek, SeekFrom};
@@ -17,6 +17,7 @@ use serde_json;
 use serde_json::Value;
 use crate::replication::rollback;
 use crate::replication::rollback::{ RollBackTrac};
+use crate::replication::grep::UpdateState;
 
 struct GrepInfo{
     grep_gtid: CheckGrepStatus,
@@ -57,10 +58,14 @@ impl CheckGrepStatus{
             grep_tbl = CheckGrepStatus::GrepTbl { state: false};
         }
         if conf.startposition.len() > 0 {
+            let mut stop_position = 0;
+            if conf.stopposition.len() > 0 {
+                stop_position = conf.stopposition.parse().unwrap();
+            }
             grep_position = CheckGrepStatus::GrepPosition {
                 state: true,
                 start_position: conf.startposition.parse().unwrap(),
-                stop_position: conf.stopposition.parse().unwrap()
+                stop_position
             }
         }
         GrepInfo{
@@ -138,7 +143,6 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
     //首先获取文件大小
     reader.seek(SeekFrom::End(0));
     let reader_size = reader.tell().unwrap();
-    //reader.seek(SeekFrom::Start(4));
     //
 
     let mut tabl_map = readevent::TableMap::new();
@@ -147,55 +151,15 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
 
     //回滚变量设置
     let mut rollback_trac = RollBackTrac::new(reader, conf);
-    let mut tmp_traction: Vec<u8> = vec![];
-    let mut rollback_traction: Vec<u8> = vec![]; //存放从gtid_event到xid_event一个完整的事务
 
     //设置过滤状态部分
-    let grep_status_info = CheckGrepStatus::new_struct(conf);
-    let mut grep_threadid_info = grep_status_info.grep_thread_id;
-    let mut grep_tbl_info = grep_status_info.grep_tbl;
-    let mut tbl_info: Value = serde_json::from_str("{}").unwrap();
-    let (mut grep_threadid, mut grep_tbl) = (false, false);
-    match grep_threadid_info {
-        CheckGrepStatus::GrepThreadId { state, thread_id } => {
-            grep_threadid = true;
-        }
-        _ => {}
-    }
-    match grep_tbl_info {
-        CheckGrepStatus::GrepTbl { state } => {
-            grep_tbl = true;
-            tbl_info = serde_json::from_str(&conf.greptbl).unwrap();
-        }
-        _ => {}
-    }
+    let mut grep_info = grep::GrepInfo::new(conf);
+    let mut check_status = false;
 
-    let mut grep_position_status = false;
-    match grep_status_info.grep_position {
-        CheckGrepStatus::GrepPosition { state, start_position, stop_position }=>{
-            if state{
-                grep_position_status = true;
-            }
-        }
-        _ => {}
-    }
-
-    let mut grep_datetime_status = false;
-    match grep_status_info.grep_date_time {
-        CheckGrepStatus::GrepDateTime{ state, start_time, stop_time }=>{
-            if state{
-                grep_position_status = true;
-            }
-        }
-        _ => {}
-    }
     //
 
-    //let mut grep_status = CheckGrepStatus::new(conf);
-    let mut gtid_traction = Traction::Unknown;
-    let mut query_traction = Traction::Unknown;
-    let mut check_status = false;
     'all: loop {
+        rollback_trac.cur_event= vec![];
         let mut header_buf = vec![0u8; 19];
         let cur_tell = reader.tell().unwrap();
         if conf.rollback{
@@ -203,188 +167,75 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                 rollback_trac.write_rollback_log();
             }
         }
+
         reader.read_exact(header_buf.as_mut()).unwrap_or_else(|err|{
-            //println!("{}",err);
+            println!("{}",err);
             std::process::exit(1);
         });
-        if conf.rollback{
+        rollback_trac.append_cur_event(&header_buf);
 
-            rollback_trac.cur_event.extend(header_buf.clone());
-        }
         let mut cur = Cursor::new(header_buf);
         let event_header: EventHeader = readevent::InitHeader::new(&mut cur,conf);
         //println!("{:?}",event_header);
         let payload = event_header.event_length as usize - event_header.header_length as usize;
         let mut payload_buf = vec![0u8; payload];
         reader.read_exact(payload_buf.as_mut());
-        if conf.rollback{
-            rollback_trac.cur_event.extend(payload_buf.clone());
-            match event_header.type_code {
-                readevent::BinlogEvent::GtidEvent => {rollback_trac.rollback_traction = vec![]}
-                _ => {}
-            }
-        }
-        //println!("{}",tmp_traction.len());
+        rollback_trac.append_cur_event(&payload_buf);
         let mut cur = Cursor::new(payload_buf);
-        //判断position和datetime过滤情况
-        match event_header.type_code {
-            readevent::BinlogEvent::UNKNOWNEVENT => {
-                rollback_trac.cur_event = vec![];
-                continue 'all;
-            }
-            _ => {
-                if grep_position_status{
-                    match grep_status_info.grep_position{
-                        CheckGrepStatus::GrepPosition { state, start_position, stop_position } => {
-                            if stop_position < event_header.next_position as usize {
-                                if conf.rollback {rollback_trac.write_rollback_log();}
-                                break 'all;
-                            }else{
-                                match grep_status_info.grep_date_time{
-                                    CheckGrepStatus::GrepDateTime { state, start_time, stop_time } => {
-                                        if start_time > event_header.timestamp as usize {
-                                            rollback_trac.cur_event = vec![];
-                                            continue 'all;
-                                        }else {
-                                            if stop_time < event_header.timestamp as usize {
-                                                if conf.rollback {rollback_trac.write_rollback_log();}
-                                                break 'all;
-                                            }
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
+        //判断gtid提取情况
+        if !grep_info.check_gtid_grep_status(&event_header) {
+            continue 'all;
+        }
 
-                }else if grep_datetime_status {
-                    match grep_status_info.grep_date_time{
-                        CheckGrepStatus::GrepDateTime { state, start_time, stop_time } => {
-                            if start_time > event_header.timestamp as usize {
-                                tmp_traction = vec![];
-                                continue 'all;
-                            }else {
-                                if stop_time < event_header.timestamp as usize {
-                                    if conf.rollback {rollback_trac.write_rollback_log();}
-                                    break;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
+        //判断position和datetime过滤情况
+        let (grep_state,success )= grep_info.grep_pos_time(&mut rollback_trac, &event_header);
+        if success{
+            break 'all;
+        }else if !grep_state {
+            continue 'all;
         }
         //
-        check_status = check_repl_grep_status(&grep_threadid_info, &grep_tbl_info,&event_header);
+        check_status = grep_info.check_repl_grep_status(&event_header);
         if !check_status {
-            rollback_trac.cur_event = vec![];
+            rollback_trac.delete_cur_event();
             continue;
         };
         let mut data = Traction::Unknown;
         match event_header.type_code {
             readevent::BinlogEvent::GtidEvent => {
-                if grep_threadid {
-                    match grep_threadid_info {
-                        CheckGrepStatus::GrepThreadId { state, thread_id} => {
-                            //thread_id只存在于query_event， gtid_event在其之前，所以需要临时存储
-                            gtid_traction = Traction::GtidEvent(readevent::GtidEvent::read_event( &event_header, &mut cur, version));
-                        }
-                        _ => {
-                            rollback_trac.cur_event = vec![];
-                            continue 'all;
-                        }
-                    }
+                rollback_trac.init_traction_buf();
+                let v = readevent::GtidEvent::read_event( &event_header, &mut cur, version);
+
+                if !grep_info.check_grep_gtid(&v){
+                    rollback_trac.delete_cur_event();
+                    continue 'all;
                 }
-                else if grep_tbl {
-                    gtid_traction = Traction::GtidEvent(readevent::GtidEvent::read_event( &event_header, &mut cur, version));
-                }
-                else {
-                    data = Traction::GtidEvent(readevent::GtidEvent::read_event( &event_header, &mut cur, version));
+
+                data = Traction::GtidEvent(v);
+                if !grep_info.save_in_gtid_tmp(&data){
+                    rollback_trac.rollback_traction.extend(&rollback_trac.cur_event);
+                    continue 'all;
                 }
             },
             readevent::BinlogEvent::QueryEvent => {
                 let v = readevent::QueryEvent::read_event( &event_header, &mut cur, version);
-                if grep_threadid{
-                    match grep_threadid_info {
-                        CheckGrepStatus::GrepThreadId { state, thread_id } => {
-                            //如果过滤thread_id在此进行判断
-                            if v.thread_id == thread_id as u32 {
-                                grep_threadid_info = grep_threadid_info.update();
-                                if  grep_tbl {
-                                    query_traction = Traction::QueryEvent(v);
-                                }
-                                else {
-                                    if !conf.rollback{
-                                        crate::stdout::format_out(&gtid_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
-                                        data = Traction::QueryEvent(v);
-                                    }
-                                }
-                            }
-                            else {
-                                rollback_trac.cur_event = vec![];
-                                rollback_trac.rollback_traction = vec![];
-                                continue 'all;
-                            }
-                        }
-                        _ => {
-                            rollback_trac.cur_event = vec![];
-                            rollback_trac.rollback_traction = vec![];
-                            continue 'all;
-                        }
-                    }
+                if !grep_info.check_grep_threadid(&v, &mut rollback_trac){
+                    continue 'all;
                 }
-                else if grep_tbl {
-                    query_traction = Traction::QueryEvent(v);
-                }
-                else {
+                if !conf.rollback{
+                    crate::stdout::format_out(&grep_info.grep_thread_id.gtid_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
                     data = Traction::QueryEvent(v);
                 }
             },
             readevent::BinlogEvent::TableMapEvent => {
-                let a = readevent::TableMap::read_event( &event_header, &mut cur, version);
-                match grep_tbl_info {
-                    CheckGrepStatus::GrepTbl { state } => {
-                        let tbls = &tbl_info[a.database_name.clone()];
-                        if tbls == &serde_json::Value::String("all".parse().unwrap()){
-                            grep_tbl_info = grep_tbl_info.update();
-                            crate::stdout::format_out(&gtid_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
-                            crate::stdout::format_out(&query_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
-                        }
-                        else {
-                            if tbls != &serde_json::Value::Null {
-                                'inner: for i in 0..20 {
-                                    if tbls[i] != serde_json::Value::Null {
-                                        if tbls[i] == serde_json::Value::String(a.table_name.clone()) {
-                                            grep_tbl_info = grep_tbl_info.update();
-                                            if !conf.rollback{
-                                                crate::stdout::format_out(&gtid_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
-                                                crate::stdout::format_out(&query_traction, conf, &mut table_cols_info, &db_tbl, &tabl_map);
-                                            }
-                                            break 'inner;
-                                        }
-                                    }else {
-                                        rollback_trac.cur_event = vec![];
-                                        rollback_trac.rollback_traction = vec![];
-                                        continue 'all;
-                                    }
-                                }
-                            }
-                            else {
-                                rollback_trac.cur_event = vec![];
-                                rollback_trac.rollback_traction = vec![];
-                                continue 'all;
-                            }
-                        }
-                    }
-                    _ => {}
+                let v = readevent::TableMap::read_event( &event_header, &mut cur, version);
+                if !grep_info.check_grep_tbl(&v, &mut rollback_trac, conf, &mut table_cols_info, &db_tbl){
+                    continue 'all;
                 }
-                db_tbl = format!("{}.{}", a.database_name, a.table_name).clone();
-                crate::meta::get_col(conf, &a.database_name, &a.table_name, &mut table_cols_info);
-                tabl_map = a.clone();
-                data = Traction::TableMapEvent(a);
+                db_tbl = format!("{}.{}", v.database_name, v.table_name).clone();
+                crate::meta::get_col(conf, &v.database_name, &v.table_name, &mut table_cols_info);
+                tabl_map = v.clone();
+                data = Traction::TableMapEvent(v);
             },
             readevent::BinlogEvent::UpdateEvent |
             readevent::BinlogEvent::DeleteEvent |
@@ -403,16 +254,22 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             readevent::BinlogEvent::XidEvent => {
                 if !conf.rollback{
                     data = Traction::XidEvent(readevent::XidEvent::read_event(&event_header,&mut cur, version));
+
+                    if grep_info.grep_gtid.start{
+                        crate::stdout::format_out(&data, conf, &mut table_cols_info, &db_tbl, &tabl_map);
+                        break 'all;
+                    }
                 }
+
                 if check_status {
                     //重新初始化状态
-                    grep_threadid_info = grep_threadid_info.init();
-                    grep_tbl_info = grep_tbl_info.init();
+                    grep_info.grep_tbl.stop();
+                    grep_info.grep_thread_id.stop();
                 }
             },
             readevent::BinlogEvent::XAPREPARELOGEVENT => {},
             readevent::BinlogEvent::UNKNOWNEVENT => {
-                rollback_trac.cur_event = vec![];
+                rollback_trac.delete_cur_event();
                 continue 'all;
             }
             readevent::BinlogEvent::RotateLogEvent => {
@@ -420,7 +277,6 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             }
             _ => {}
         }
-
 
         if !conf.rollback{
             crate::stdout::format_out(&data, conf, &mut table_cols_info, &db_tbl, &tabl_map);
@@ -432,9 +288,13 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                     rollback_trac.events.push(rollback_trac.rollback_traction.clone());
                     rollback_trac.count += tra_len;
                     if rollback_trac.check_file_size(){
-                        rollback_trac = rollback_trac.update();
+                        rollback_trac.update();
                     }
-                    rollback_trac.rollback_traction = vec![];
+
+                    if grep_info.grep_gtid.start{
+                        rollback_trac.write_rollback_log();
+                        break 'all;
+                    }
                 }
                 readevent::BinlogEvent::WriteEvent|
                 readevent::BinlogEvent::UpdateEvent|
@@ -583,9 +443,8 @@ pub fn readbinlog(conn: &mut TcpStream, conf: &Config, version: &u8) {
             readevent::BinlogEvent::UpdateEvent |
             readevent::BinlogEvent::DeleteEvent |
             readevent::BinlogEvent::WriteEvent => {
-                let read_type = crate::meta::ReadType::File;
+                let read_type = crate::meta::ReadType::Repl;
                 let v = parsevalue::RowValue::read_row_value(&mut cur, &tabl_map, &event_header,&read_type);
-
                 data = Traction::RowEvent(event_header.type_code.clone(),v);
             },
             readevent::BinlogEvent::XidEvent => {
