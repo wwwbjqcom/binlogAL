@@ -21,7 +21,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
    host： mysql地址端口   
    runtype： 设置工具模式，必须选一个进行设置  
   
-###	replication模式:    
+### replication模式:    
    gtid: 利用gtid进行注册拉取binlog， gtid优先级高于position配置   
    binlogfile： 通过postion同步注册使用的binlog文件   
    position： position位置信息  
@@ -60,7 +60,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 	COMMIT;
 
    
-###	读取binlog文件:  
+### 读取binlog文件: 
 file: 指定binlog文件 
 startposition： 从那个postion开始读取 
 stopposition： 停止位置 
@@ -89,7 +89,7 @@ statiac: 统计每个事务大小
 	              id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
 	XidEvent      xid:3116
 
-###	回滚：  
+### 回滚：  
    1、只能从binlog文件获取
    2、默认以1G做为单个文件最大值,可以通过配置项自行修改
    3、事务顺序倒叙生成
