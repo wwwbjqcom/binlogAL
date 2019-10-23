@@ -198,8 +198,8 @@ impl InitValue for RotateLog{
     fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R, _version: &u8) -> RotateLog{
         let fixed_length: usize = 8;
         buf.seek(io::SeekFrom::Current(8)).unwrap();
-
-        let mut tmp_buf = vec![0u8; header.event_length as usize - header.header_length as usize - fixed_length as usize];
+        //println!("{},{}",header.event_length,header.header_length);
+        let mut tmp_buf = vec![0u8; header.event_length as usize - 19 - fixed_length as usize];
         buf.read_exact(&mut tmp_buf).unwrap();
         //buf.read_to_end(&mut tmp_buf).unwrap();
         //println!("{}",tmp_buf.len());

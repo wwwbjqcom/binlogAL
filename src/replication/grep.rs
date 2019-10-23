@@ -335,7 +335,7 @@ impl GrepInfo {
             if tbls == &serde_json::Value::String("all".parse().unwrap()){
                 self.grep_tbl.start();
                 if !conf.rollback{
-                    crate::stdout::format_out(&self.grep_tbl.gtid_traction, conf, table_cols_info, db_tbl, v);
+                    crate::stdout::format_out(&self.grep_thread_id.gtid_traction, conf, table_cols_info, db_tbl, v);
                     crate::stdout::format_out(&self.grep_tbl.query_traction, conf, table_cols_info, db_tbl, v);
                 }
 
@@ -346,7 +346,7 @@ impl GrepInfo {
                             if tbls[i] == serde_json::Value::String(v.table_name.clone()) {
                                 self.grep_tbl.start();
                                 if !conf.rollback{
-                                    crate::stdout::format_out(&self.grep_tbl.gtid_traction, conf, table_cols_info, db_tbl, v);
+                                    crate::stdout::format_out(&self.grep_thread_id.gtid_traction, conf, table_cols_info, db_tbl, v);
                                     crate::stdout::format_out(&self.grep_tbl.query_traction, conf, table_cols_info, db_tbl, v);
                                 }
 

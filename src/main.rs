@@ -9,7 +9,7 @@ fn main() {
         println!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
-    println!("{:?}",config);
+    //println!("{:?}",config);
     mytest::startop(&config);
 
 
