@@ -102,7 +102,8 @@ statiac: 统计每个事务大小
 	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}' --rollback  
 	从binlog文件提取数据  
 	failed to fill whole buffer  
-	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'rollback-1.log' --getsql 从binlog文件提取数据  
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'rollback-1.log' --getsql 
+	从binlog文件提取数据  
 	-- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:14  
 	use xz_test;  
 	BEGIN;  
