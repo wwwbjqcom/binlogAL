@@ -42,12 +42,14 @@ runtype： 设置工具模式，必须选一个进行设置
 	QueryEvent    thread_id:1519, database:xz_test, command:BEGIN  
 	TableMap      database_name:xz_test, table_name:t8  
 	ROW_VALUE  
-	 id: 1, id1: 4, a: bb, b: 2, c: 0x36333634,XidEvent      xid:3114  
+	 id: 1, id1: 4, a: bb, b: 2, c: 0x36333634,
+	XidEvent      xid:3114  
 	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584  
 	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN  
 	TableMap      database_name:xz_test, table_name:t6  
 	ROW_VALUE  
-	 id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, XidEvent      xid:3116  
+	 id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
+	XidEvent      xid:3116  
 	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' --threadid 1511 --greptbl '{"xz_test":["t8"]}' --getsql  
 	-- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:12  
 	use xz_test;  
@@ -81,7 +83,8 @@ statiac: 统计每个事务大小
 	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN  
 	TableMap      database_name:xz_test, table_name:t6  
 	ROW_VALUE  
-	 id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, XidEvent      xid:3116
+	 id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
+	XidEvent      xid:3116
 
 ## 回滚：
 
