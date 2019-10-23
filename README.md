@@ -60,9 +60,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 	COMMIT;
 
    
-###	读取binlog文件: 
-file:
-startposition: 
+###	读取binlog文件:  
 file: 指定binlog文件 
 startposition： 从那个postion开始读取 
 stopposition： 停止位置 
