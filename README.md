@@ -78,7 +78,8 @@ statiac: 统计每个事务大小
 	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN  
 	TableMap      database_name:xz_test, table_name:t8  
 	ROW_VALUE  
-	 id: 1, id1: 3, a: b, b: 2, c: 0x36333633,XidEvent      xid:3089  
+	 id: 1, id1: 3, a: b, b: 2, c: 0x36333633,
+	XidEvent      xid:3089  
 	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584  
 	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN  
 	TableMap      database_name:xz_test, table_name:t6  
