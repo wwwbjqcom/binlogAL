@@ -31,33 +31,33 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
    statiac: 统计每个事务大小 
    直接从mysql拉取binlog只支持对库表信息、连接id信息进行提取，下面可以看到用gtid进行注册的使用方法
 
-> mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' 
-RotateLog { binlog_file: "bin.000001" }
-GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:12, last_committed:2818, sequence_number:3072
-QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
-TableMap      database_name:xz_test, table_name:t8
-ROW_VALUE
-              id: 1, id1: 3, a: b, b: 2, c: 0x36333633,
-XidEvent      xid:3089
-GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:13, last_committed:3074, sequence_number:3328
-QueryEvent    thread_id:1519, database:xz_test, command:BEGIN
-TableMap      database_name:xz_test, table_name:t8
-ROW_VALUE
-              id: 1, id1: 4, a: bb, b: 2, c: 0x36333634,
-XidEvent      xid:3114
-GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584
-QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
-TableMap      database_name:xz_test, table_name:t6
-ROW_VALUE
-              id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
-XidEvent      xid:3116
-mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' --threadid 1511 --greptbl '{"xz_test":["t8"]}' --getsql
--- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:12
-use xz_test;
-BEGIN;
--- Insert Row Value
-INSERT INTO xz_test.t8(id,id1,a,b,c) VALUES(1,3,'b',2,0x36333633);
-COMMIT;
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' 
+	RotateLog { binlog_file: "bin.000001" }
+	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:12, last_committed:2818, sequence_number:3072
+	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
+	TableMap      database_name:xz_test, table_name:t8
+	ROW_VALUE
+	              id: 1, id1: 3, a: b, b: 2, c: 0x36333633,
+	XidEvent      xid:3089
+	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:13, last_committed:3074, sequence_number:3328
+	QueryEvent    thread_id:1519, database:xz_test, command:BEGIN
+	TableMap      database_name:xz_test, table_name:t8
+	ROW_VALUE
+	              id: 1, id1: 4, a: bb, b: 2, c: 0x36333634,
+	XidEvent      xid:3114
+	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584
+	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
+	TableMap      database_name:xz_test, table_name:t6
+	ROW_VALUE
+	              id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
+	XidEvent      xid:3116
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' --threadid 1511 --greptbl '{"xz_test":["t8"]}' --getsql
+	-- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:12
+	use xz_test;
+	BEGIN;
+	-- Insert Row Value
+	INSERT INTO xz_test.t8(id,id1,a,b,c) VALUES(1,3,'b',2,0x36333633);
+	COMMIT;
 
    
 ###	读取binlog文件:  
@@ -74,20 +74,20 @@ COMMIT;
    配置项可以多种搭配方式，比如我想统计某个positon范围中某个thread_id产生的某个表的信息
    
 
-> mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}'
-从binlog文件提取数据
-GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:12, last_committed:2818, sequence_number:3072
-QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
-TableMap      database_name:xz_test, table_name:t8
-ROW_VALUE
-              id: 1, id1: 3, a: b, b: 2, c: 0x36333633,
-XidEvent      xid:3089
-GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584
-QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
-TableMap      database_name:xz_test, table_name:t6
-ROW_VALUE
-              id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
-XidEvent      xid:3116
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}'
+	从binlog文件提取数据
+	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:12, last_committed:2818, sequence_number:3072
+	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
+	TableMap      database_name:xz_test, table_name:t8
+	ROW_VALUE
+	              id: 1, id1: 3, a: b, b: 2, c: 0x36333633,
+	XidEvent      xid:3089
+	GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:14, last_committed:3330, sequence_number:3584
+	QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
+	TableMap      database_name:xz_test, table_name:t6
+	ROW_VALUE
+	              id: 1, a: a, b: 2, c: 1, d: 0x3742,e: abc, 
+	XidEvent      xid:3116
 
 ###	回滚：  
    1、只能从binlog文件获取
@@ -99,25 +99,25 @@ XidEvent      xid:3116
    ####	回滚使用方法：
    参数可以同文件读取一样任意搭配，比如我想把上面文件读取打印的binlog进行回滚只需要加个--rollback就行, 执行完成会在当前目录产生以rollback开头的日志文件
 
-> mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}' --rollback
-从binlog文件提取数据
-failed to fill whole buffer
-mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'rollback-1.log' --getsql 
-从binlog文件提取数据
--- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:14
-use xz_test;
-BEGIN;
--- Insert Row Value
-INSERT INTO xz_test.t6(id,a,b,c,d,e) VALUES(1,'a',2,1,0x3742,'abc');
-COMMIT;
--- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:12
-use xz_test;
-BEGIN;
--- Delete Row Value
-DELETE FROM xz_test.t8  WHERE id=1 AND id1=3;
-COMMIT;
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}' --rollback
+	从binlog文件提取数据
+	failed to fill whole buffer
+	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'rollback-1.log' --getsql 
+	从binlog文件提取数据
+	-- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:14
+	use xz_test;
+	BEGIN;
+	-- Insert Row Value
+	INSERT INTO xz_test.t6(id,a,b,c,d,e) VALUES(1,'a',2,1,0x3742,'abc');
+	COMMIT;
+	-- GTID: 1886928a-ce21-11e9-bee2-50edb3ba887e:12
+	use xz_test;
+	BEGIN;
+	-- Delete Row Value
+	DELETE FROM xz_test.t8  WHERE id=1 AND id1=3;
+	COMMIT;
 
-可以看到已经把数据反转为对应的回滚语句， 可以直接使用mysqlbinlog进行操作，也可以直复制提取的sql进行执行，使用mysqlbinlog操作方式如下
+可以看到已经把数据反转为对应的回滚语句， 可以直接使用mysqlbinlog进行操作，也可以直复制提取的sql进行执行，如果使用mysqlbinlog操作方式如下
 	
 	bin/mysqlbinlog rollback-1.log --skip-gtids | bin/mysql -uroot -proot -h 127.0.0.1
    
