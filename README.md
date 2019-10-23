@@ -61,17 +61,17 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 
    
 ###	读取binlog文件:  
-   file: 指定binlog文件 
-   startposition： 从那个postion开始读取 
-   stopposition： 停止位置 
-   startdatetime： 提取时间范围的binlog时，开始时间 
-   stopdatetime： 停止时间 
-   getsql： 提取为sql语句 
-   threadid: 提取某个线程id产生的数据 
-   greptbl: 提取某些表产生的数据 
-   gtid: 在该模式下配置gtid，则为提取对于gtid的数据 
-   statiac: 统计每个事务大小  
-   配置项可以多种搭配方式，比如我想统计某个positon范围中某个thread_id产生的某个表的信息
+  file: 指定binlog文件 
+  startposition： 从那个postion开始读取 
+  stopposition： 停止位置 
+  startdatetime： 提取时间范围的binlog时，开始时间 
+  stopdatetime： 停止时间 
+  getsql： 提取为sql语句 
+  threadid: 提取某个线程id产生的数据 
+  greptbl: 提取某些表产生的数据 
+  gtid: 在该模式下配置gtid，则为提取对于gtid的数据 
+  statiac: 统计每个事务大小  
+  配置项可以多种搭配方式，比如我想统计某个positon范围中某个thread_id产生的某个表的信息
    
 
 	mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype file --file 'bin.000001' --startposition 3636 --threadid 1511 --greptbl '{"xz_test":"all"}'
