@@ -32,7 +32,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
    直接从mysql拉取binlog只支持对库表信息、连接id信息进行提取，下面可以看到用gtid进行注册的使用方法
 
 > mm:debug xxxxx$ ./mytest -uroot -proot -h 127.0.0.1:3306 --runtype repl --gtid '1886928a-ce21-11e9-bee2-50edb3ba887e:1-11' 
-RotateLog { binlog_file: "bin.000001" }
+RotateLog { binlog_file: "bin.000001" }\n
 GtidEvent     gtid:1886928a-ce21-11e9-bee2-50edb3ba887e, gno_id:12, last_committed:2818, sequence_number:3072
 QueryEvent    thread_id:1511, database:xz_test, command:BEGIN
 TableMap      database_name:xz_test, table_name:t8
