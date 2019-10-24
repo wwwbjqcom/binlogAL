@@ -125,4 +125,4 @@ statiac: 统计每个事务大小
 
 连接mysql未使用开源框架，是直接通过socket连接实现mysql协议的，所以这里弄了一个语句执行的模式来验证，通过-c参数直接指定sql语句, 可以使用-D进行默认库指定，如果不指定则在sql中需要写明
 
-	./mytest -uroot -proot -h 127.0.0.1:3306 -D information_schema -c 'select * from tables'
+	./mytest -uroot -proot -h 127.0.0.1:3306 --runtype command -D information_schema -c 'select * from tables'
