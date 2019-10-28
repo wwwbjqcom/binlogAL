@@ -11,7 +11,6 @@ pub mod replication;
 use std::str;
 use std::process;
 
-
 use structopt::StructOpt;
 use std::net::TcpStream;
 

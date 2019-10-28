@@ -9,12 +9,19 @@ use crate::meta::PackType;
 use std::convert::TryInto;
 use std::process;
 use crate::Config;
-use crate::io::scramble;
+use crate::io::{scramble, socketio, pack};
+use std::net::TcpStream;
+use crate::io::socketio::write_value;
+use mysql_common::crypto::encrypt;
+use mysql_common;
+use failure::_core::str::from_utf8;
+
 //
 //pub trait pack{
 //    fn pack_header(buf: &[u8], seq: u8)-> Vec<u8>;
 //    fn pack_payload<T>(buf: &T,pack_type: &PackType,config: &Config) -> Vec<u8>;
 //}
+
 
 //handshakereponse回包基础信息
 #[derive(Debug)]
@@ -69,20 +76,16 @@ impl LocalInfo {
         rdr.extend(config.user_name.clone().into_bytes());
         rdr.push(0);
 
-        let sha1_pass;
-        match scramble::scramble_native(buf.auth_plugin_data[..20].as_ref(), config.password.as_bytes()){
-            Some(value) => {sha1_pass=value},
-            None => process::exit(1)
+        let sha1_pass= scramble::get_sha1_pass(config, &buf.auth_plugin_name, &buf.auth_plugin_data);
 
-        };
         if buf.capability_flags & (flags_meta.client_plugin_auth_lenenc_client_data as u32) > 0{
             rdr.push(sha1_pass.len() as u8);
-            rdr.extend(sha1_pass.iter());
+            rdr.extend(sha1_pass);
         }else if buf.capability_flags & (flags_meta.secure_connection as u32) > 0 {
                 rdr.push(sha1_pass.len() as u8);
-                rdr.extend(sha1_pass.iter());
+                rdr.extend(sha1_pass);
             }else {
-            rdr.extend(sha1_pass.iter());
+            rdr.extend(sha1_pass);
             rdr.push(0);
         }
 
@@ -120,6 +123,7 @@ impl LocalInfo {
     }
 
 
+
 }
 
 impl LocalInfo {
@@ -154,7 +158,7 @@ impl LocalInfo {
 }
 
 //auth_switch需再次验证密码方式
-pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config) -> Vec<u8> {
+pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config) -> (Vec<u8>,Vec<u8>) {
     let mut packet: Vec<u8> = vec![];
     let mut payload: Vec<u8> = vec![];
     let mut offset = 1;
@@ -171,17 +175,45 @@ pub fn authswitchrequest(handshake: &HandshakePacket,buf: &Vec<u8>,conf: &Config
     if auth_plugin_name.len() > 0 {
         let flags_meta = meta::FlagsMeta::new();
         if handshake.capability_flags & flags_meta.client_plugin_auth as u32 > 0 {
-            match scramble::scramble_native(&auth_plugin_data[..20], conf.password.as_bytes()){
-                Some(value) => {payload= value.to_vec() },
-                None => process::exit(1)
-            }
+            payload = scramble::get_sha1_pass(conf, &auth_plugin_name, &auth_plugin_data.to_vec());
         }
     }
 
     packet.extend(pack_header(payload.as_ref(), 3));
     packet.extend(payload);
-    return packet;
+    return (packet, auth_plugin_data.to_vec());
 }
+
+pub fn sha2_auth(conn: &mut TcpStream, auth_data: &Vec<u8>, conf: &Config) -> bool {
+    let (payload, seq_id) = ([0x02],5);
+    let mut packet: Vec<u8> = vec![];
+    packet.extend(pack_header(&payload, seq_id));
+    packet.extend(payload.iter());
+    write_value(conn, &packet);
+
+    let (packet_buf,_) = socketio::get_packet_from_stream(conn);
+
+    let key = &packet_buf[1..];
+    let mut password = conf.password.as_bytes().to_vec();
+    password.push(0);
+    for i in 0..password.len() {
+        password[i] ^= auth_data[i % auth_data.len()];
+    }
+    let encrypted_pass = encrypt(&password, &key);
+    let mut packet: Vec<u8> = vec![];
+    packet.extend(pack_header(&encrypted_pass, 7));
+    packet.extend(encrypted_pass.iter());
+    write_value(conn, &packet);
+
+    let (packet_buf,_) = socketio::get_packet_from_stream(conn);
+    if pack::check_pack(&packet_buf) {
+        return true;
+    } else {
+        return false;
+    }
+    true
+}
+
 
 //组装heder部分
 pub fn pack_header(buf: &[u8], seq: u8) -> Vec<u8> {

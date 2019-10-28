@@ -55,7 +55,6 @@ fn get_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader){
             println!("read packet error");
         }
     }
-
     return (packet_buf,header);
 }
 
@@ -68,7 +67,6 @@ pub fn get_packet_from_stream(stream: &mut TcpStream) -> (Vec<u8>, PacketHeader)
     }
     (buf, header)
 }
-
 
 //向连接写入数据
 pub fn write_value(stream: &mut TcpStream, buf: &Vec<u8>) -> Result<(),Box<dyn Error>> {

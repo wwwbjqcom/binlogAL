@@ -1,6 +1,5 @@
-
-use std::process;
 use mytest;
+use std::process;
 use structopt::StructOpt;
 
 fn main() {
@@ -11,7 +10,5 @@ fn main() {
     });
     //println!("{:?}",config);
     mytest::startop(&config);
-
-
 
 }

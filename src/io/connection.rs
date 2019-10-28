@@ -51,9 +51,13 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
 
     //检查服务端回包情况
     let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
+
+
+    let mut tmp_auth_data = vec![];
     if packet_buf[0] == 0xFE {
         //重新验证密码
-        let auth_data = response::authswitchrequest(&handshake, packet_buf.as_ref(), conf);
+        let (auth_data, tmp) = response::authswitchrequest(&handshake, packet_buf.as_ref(), conf);
+        tmp_auth_data = tmp;
         socketio::write_value(&mut mysql_conn, auth_data.as_ref()).unwrap_or_else(|err|{
             println!("{}",err);
             process::exit(1);
@@ -61,12 +65,26 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
     }
 
     let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
-
     if pack::check_pack(&packet_buf) {
+//        use std::{thread, time};
+//        let ten_millis = time::Duration::from_secs(100);
+//        thread::sleep(ten_millis);
+        if packet_buf[1] == 4{
+            if !response::sha2_auth(&mut mysql_conn, &tmp_auth_data, conf){
+               return Err("connection failed");
+            }
+        }else if packet_buf[1] == 3 {
+            let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
+            if !pack::check_pack(&packet_buf) {
+                return Err("connection failed");
+            }
+        }
         Ok(mysql_conn)
     } else {
         Err("connection failed")
     }
-
 }
+
+
+
 
