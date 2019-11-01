@@ -17,7 +17,7 @@ use std::net::TcpStream;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
 pub struct Opt {
-    #[structopt(long = "runtype",help = "程序运行模式, [repl: 模拟slave获取binlog数据, monitor: 实时监控mysql运行状态, command: 执行sql语句, file: 从binlog文件获取数据]")]
+    #[structopt(long = "runtype",help = "程序运行模式, [repl: 模拟slave获取binlog数据, command: 执行sql语句, file: 从binlog文件获取数据]")]
     pub runtype: Option<String>,
 
     #[structopt(short = "u", long = "user",help = "mysql用户名")]

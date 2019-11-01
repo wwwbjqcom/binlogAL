@@ -1,7 +1,6 @@
-# my_test
+# binlogAL(binlog analysis)
 
-rust语言学习, 并利用来重构了以前python写的部分工具。
-
+利用自己学习rust语言的时间，重构了以前python写的部分工具。
 
 # 功能
 
@@ -12,7 +11,7 @@ rust语言学习, 并利用来重构了以前python写的部分工具。
 
 ## 使用方法
 
-可以使用--help查看所有参数选项(有部分功能还未实现).
+可以使用--help查看所有参数选项, 在release下可获取linux的可执行文件，也可直接下载源码自行编译
 
 ## 必配项:
 
@@ -20,6 +19,7 @@ user: 连接mysql的用户名
 password： mysql密码     
 host： mysql地址端口     
 runtype： 设置工具模式，必须选一个进行设置
+所有数据分析都会利用到表结构，所以必须连接到对应数据库才能运行
 
 ## replication模式(--runtype=repl):
 
