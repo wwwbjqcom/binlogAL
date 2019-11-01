@@ -16,7 +16,8 @@ pub fn read_num_pack<R: Read, S: Into<usize>>(num: S, buf: &mut R) -> Vec<u8> {
 
 pub fn read_string_value_from_len<R: Read, S: Into<usize>>(buf: &mut R,num: S) -> String {
     let pack = read_num_pack(num,buf);
-    from_utf8(&pack).unwrap().parse().unwrap()
+    String::from_utf8_lossy(&pack).to_string()
+    //from_utf8(&pack).unwrap().parse().unwrap()
 }
 
 pub fn read_string_value(pack: &[u8]) -> String{

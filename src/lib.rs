@@ -17,7 +17,7 @@ use std::net::TcpStream;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "example", about = "An example of StructOpt usage.")]
 pub struct Opt {
-    #[structopt(long = "runtype",help = "程序运行模式, [repl: 模拟slave获取binlog数据, mha: 高可用管理模式, monitor: 实时监控mysql运行状态, command: 执行sql语句, file: 从binlog文件获取数据, databus: 同步数据到其他db]")]
+    #[structopt(long = "runtype",help = "程序运行模式, [repl: 模拟slave获取binlog数据, monitor: 实时监控mysql运行状态, command: 执行sql语句, file: 从binlog文件获取数据]")]
     pub runtype: Option<String>,
 
     #[structopt(short = "u", long = "user",help = "mysql用户名")]
@@ -77,12 +77,6 @@ pub struct Opt {
     #[structopt(long = "greptbl", help="过滤出某个表所产生的binlog数据，格式为{'db1':['tb1','tb2'],'db2':[]...}}, 如果要提取一个库的所有表格式为{'db1':'all',....}")]
     pub greptbl: Option<String>,
 
-    #[structopt(long = "mhaserver", help="做为高可用管理服务端启动, 开启选项需指定配置文件")]
-    pub mhaserver: bool,
-
-    #[structopt(long = "mhaclient", help="做为高可用客户端启动, 与mysql实例在同一节点上, 开启需指定配置文件")]
-    pub mhaclient: bool,
-
     #[structopt(long = "rfilesize", help="单个回滚日志文件大小, 可以不用设置, 默认1G, 设置值是以字节为单位")]
     pub rfilesize: Option<String>,
 
@@ -104,8 +98,6 @@ pub struct Config {
     pub serverid: String,
     pub getsql: bool,
     pub rollback: bool,
-    pub mhaserver: bool,
-    pub mhaclient: bool,
     pub statisc: bool,
     pub startposition: String,
     pub stopposition: String,
@@ -131,8 +123,6 @@ impl Config{
         let mut serverid = String::from("");
         let getsql = args.getsql;
         let rollback = args.rollback;
-        let mhaserver = args.mhaserver;
-        let mhaclient = args.mhaclient;
         let statisc = args.statisc;
         let mut startposition = String::from("");
         let mut stopposition = String::from("");
@@ -238,7 +228,7 @@ impl Config{
         Ok(Config { program_name:String::from("rust_test"),statisc,rfilesize,
             host_info, user_name ,getsql,rollback,startposition,stopposition,
             password, database,serverid,startdatetime,stopdatetime,threadid,greptbl,
-            command,file,binlogfile,position,gtid,runtype,mhaserver,mhaclient})
+            command,file,binlogfile,position,gtid,runtype})
     }
 }
 

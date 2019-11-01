@@ -196,14 +196,15 @@ pub struct RotateLog{
 
 impl InitValue for RotateLog{
     fn read_event<R: Read+Seek>(header: &EventHeader, buf: &mut R, _version: &u8) -> RotateLog{
-        let fixed_length: usize = 8;
-        buf.seek(io::SeekFrom::Current(8)).unwrap();
-        //println!("{},{}",header.event_length,header.header_length);
-        let mut tmp_buf = vec![0u8; header.event_length as usize - 19 - fixed_length as usize];
+        buf.seek(io::SeekFrom::End(0)).unwrap();
+        let end_idx = buf.tell().unwrap() as usize;
+        let offset_idx = header.header_length as usize + 8;
+        buf.seek(io::SeekFrom::Start(offset_idx as u64)).unwrap();
+
+        let len_gg = end_idx - offset_idx;
+        let mut tmp_buf = vec![0u8; len_gg];
         buf.read_exact(&mut tmp_buf).unwrap();
-        //buf.read_to_end(&mut tmp_buf).unwrap();
-        //println!("{}",tmp_buf.len());
-        let binlog_file = readvalue::read_string_value(&tmp_buf);
+        let binlog_file = String::from_utf8_lossy(&tmp_buf).to_string();
         RotateLog{
             binlog_file
         }
