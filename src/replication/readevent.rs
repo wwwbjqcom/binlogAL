@@ -151,7 +151,7 @@ impl InitValue for QueryEvent{
 
         let mut command_pak = vec![];
         if *version == 5 {
-            let command_length = header.event_length as usize - buf.tell().unwrap() as usize - 3;
+            let command_length = header.event_length as usize - buf.tell().unwrap() as usize - 4;
             command_pak = vec![0u8; command_length];
             buf.read_exact(&mut command_pak).unwrap();
         }else {
