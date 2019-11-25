@@ -21,13 +21,14 @@ pub fn read_string_value_from_len<R: Read, S: Into<usize>>(buf: &mut R,num: S) -
 }
 
 pub fn read_string_value(pack: &[u8]) -> String{
-    match from_utf8(pack) {
-        Ok(t) => t.parse().unwrap(),
-        Err(e) => {
-            println!("{:?}", e);
-            String::from("")
-        }
-    }
+    String::from_utf8_lossy(&pack).to_string()
+//    match from_utf8(pack) {
+//        Ok(t) => t.parse().unwrap(),
+//        Err(e) => {
+//            println!("{:?}", e);
+//            String::from("")
+//        }
+//    }
 
 }
 
