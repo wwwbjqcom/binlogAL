@@ -130,7 +130,7 @@ impl RowValue{
 
         //let col_count = map.column_info.len();
         let col_count = buf.read_u8().unwrap();
-
+        //println!("{:?}",col_count);
         let columns_length = ((col_count + 7) / 8) as i64;
         match header.type_code {
             BinlogEvent::UpdateEvent => {
@@ -141,7 +141,6 @@ impl RowValue{
 
             }
         }
-
         let mut rows: Vec<Vec<Option<MySQLValue>>> = vec![];;
         loop {
             let mut null_bit = vec![0u8; columns_length as usize];
@@ -167,14 +166,13 @@ impl RowValue{
                     }
                 }
                 crate::meta::ReadType::File => {
-                    if (buf.tell().unwrap() + 4) as usize > header.event_length as usize  - 19 {
+                    if (buf.tell().unwrap() + 4) as usize >= header.event_length as usize  - 19 {
                         break;
                     }
                 }
             }
 
         };
-
         RowValue{
             rows
         }
