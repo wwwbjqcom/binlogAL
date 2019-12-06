@@ -148,16 +148,14 @@ impl InitValue for QueryEvent{
         let database = readvalue::read_string_value(&database_pack);
         buf.seek(io::SeekFrom::Current(1)).unwrap();
 
-
         let mut command_pak = vec![];
         if *version == 5 {
-            let command_length = header.event_length as usize - buf.tell().unwrap() as usize - 4;
+            let command_length = header.event_length as usize - header.header_length as usize - buf.tell().unwrap() as usize - 4;
             command_pak = vec![0u8; command_length];
             buf.read_exact(&mut command_pak).unwrap();
         }else {
             buf.read_to_end(&mut command_pak).unwrap();
         }
-
         let command = readvalue::read_string_value(&command_pak);
 
         QueryEvent{

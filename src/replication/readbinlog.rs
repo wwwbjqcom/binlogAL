@@ -176,7 +176,6 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
 
         let mut cur = Cursor::new(header_buf);
         let event_header: EventHeader = readevent::InitHeader::new(&mut cur,conf);
-        //println!("{:?}",event_header);
         let payload = event_header.event_length as usize - event_header.header_length as usize;
         let mut payload_buf = vec![0u8; payload];
         reader.read_exact(payload_buf.as_mut());
