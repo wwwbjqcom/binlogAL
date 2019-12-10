@@ -240,7 +240,7 @@ fn update_event<R: Read+Seek>(event: &mut R, map: &TableMap, event_header: &Even
             after_bytes = vec![];
         }
 
-        if (event.tell().unwrap() + 4) as usize > event_header.event_length as usize {
+        if (event.tell().unwrap() + 4) as usize >= event_header.event_length as usize {
             let mut a = vec![];
             event.read_to_end(&mut a);
             if a.len() > 0 {
