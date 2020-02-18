@@ -157,7 +157,7 @@ fn print_row_value(row_values: &RowValue,code: &BinlogEvent, table_cols_info: &m
                             print!("{}: {}:{}:{}.{}, ", col, hours,minutes,seconds,subseconds);
                         }
                         Some(MySQLValue::Timestamp { unix_time, subsecond }) => {
-                            print!("{}: {}.{}, ", col,unix_time,subsecond);
+                            print!("{}: from_unixtime({}.{}), ", col,unix_time,subsecond);
                         }
                         _ => {}
                     }

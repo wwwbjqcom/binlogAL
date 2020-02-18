@@ -85,7 +85,7 @@ fn get_values_info(value: &Option<MySQLValue>, col_type: &String) -> String {
             }
         }
         Some(MySQLValue::Timestamp {unix_time, subsecond}) => {
-            value_str.push_str(&format!("{}.{}", unix_time, subsecond));
+            value_str.push_str(&format!("from_unixtime({}.{})", unix_time, subsecond));
         }
         Some(MySQLValue::Enum(t)) => {
             value_str.push_str(&format!("{}",t));
@@ -247,7 +247,7 @@ fn get_value_str(value: &Option<MySQLValue>,col: &String, col_type: &String, get
             }
         }
         Some(MySQLValue::Timestamp {unix_time, subsecond}) => {
-            where_str.push_str(&format!("{}={}.{}", col, unix_time, subsecond));
+            where_str.push_str(&format!("{}=from_unixtime({}.{})", col, unix_time, subsecond));
         }
         Some(MySQLValue::Enum(t)) => {
             where_str.push_str(&format!("{}={}",col,t));
