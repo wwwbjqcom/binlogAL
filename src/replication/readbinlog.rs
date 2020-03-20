@@ -351,6 +351,7 @@ pub fn readbinlog(conn: &mut TcpStream, conf: &Config, version: &u8) {
         let mut cur = Cursor::new(buf);
 
         let event_header: EventHeader = readevent::InitHeader::new(&mut cur,conf);
+        //println!("{:?}", event_header);
         check_status = check_repl_grep_status(&grep_threadid_info, &grep_tbl_info, &event_header);
         if !check_status {
             continue;

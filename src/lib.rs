@@ -243,7 +243,7 @@ pub fn startop(config: &Config) {
         let mut conn = create_conn(config);
         replication::repl_register(&mut conn,&config);
     }else if config.runtype == String::from("file") {
-        println!("从binlog文件提取数据");
+        //println!("从binlog文件提取数据");
         let mut conn = create_conn(config);
         replication::repl_register(&mut conn,config);
 

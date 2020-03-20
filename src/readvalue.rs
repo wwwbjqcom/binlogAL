@@ -29,7 +29,20 @@ pub fn read_string_value(pack: &[u8]) -> String{
             String::from("")
         }
     }
+}
 
+pub fn read_string_lossy_value(pack: &[u8], version: &u8) -> String{
+    if pack.len() == 9 {
+        return String::from("BEGIN");
+    } else {
+        match from_utf8(pack) {
+            Ok(t) => t.parse().unwrap(),
+            Err(e) => {
+                println!("{:?}", e);
+                String::from("")
+            }
+        }
+    }
 }
 
 pub fn read_u16(pack: &[u8]) -> u16 {
