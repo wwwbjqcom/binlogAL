@@ -151,15 +151,19 @@ impl InitValue for QueryEvent{
 
         let mut command_pak = vec![];
         let mut command = String::from("");
-        if *version == 5 {
-            let command_length = header.event_length as usize - header.header_length as usize - buf.tell().unwrap() as usize - 4;
-            command_pak = vec![0u8; command_length];
-            buf.read_exact(&mut command_pak).unwrap();
-            command = readvalue::read_string_value(&command_pak);
-        }else {
-            buf.read_to_end(&mut command_pak).unwrap();
-            command = readvalue::read_string_lossy_value(&command_pak, version);
-        }
+        let command_length = header.event_length as usize - header.header_length as usize - buf.tell().unwrap() as usize - 4;
+        command_pak = vec![0u8; command_length];
+        buf.read_exact(&mut command_pak).unwrap();
+        command = readvalue::read_string_value(&command_pak);
+//        if *version == 5 {
+//            let command_length = header.event_length as usize - header.header_length as usize - buf.tell().unwrap() as usize - 4;
+//            command_pak = vec![0u8; command_length];
+//            buf.read_exact(&mut command_pak).unwrap();
+//            command = readvalue::read_string_value(&command_pak);
+//        }else {
+//            buf.read_to_end(&mut command_pak).unwrap();
+//            command = readvalue::read_string_lossy_value(&command_pak, version);
+//        }
 
         QueryEvent{
             thread_id,

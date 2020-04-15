@@ -35,13 +35,14 @@ pub fn read_string_lossy_value(pack: &[u8], version: &u8) -> String{
     if pack.len() == 9 {
         return String::from("BEGIN");
     } else {
-        match from_utf8(pack) {
-            Ok(t) => t.parse().unwrap(),
-            Err(e) => {
-                println!("{:?}", e);
-                String::from("")
-            }
-        }
+        return String::from_utf8_lossy(&pack).to_string();
+//        match from_utf8(pack) {
+//            Ok(t) => t.parse().unwrap(),
+//            Err(e) => {
+//                println!("{:?}", e);
+//                String::from("")
+//            }
+//        }
     }
 }
 
