@@ -84,7 +84,7 @@ impl LocalInfo {
         }else if buf.capability_flags & (flags_meta.secure_connection as u32) > 0 {
                 rdr.push(sha1_pass.len() as u8);
                 rdr.extend(sha1_pass);
-            }else {
+        }else {
             rdr.extend(sha1_pass);
             rdr.push(0);
         }
