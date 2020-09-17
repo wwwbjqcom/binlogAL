@@ -133,7 +133,7 @@ fn print_row_value(row_values: &RowValue,code: &BinlogEvent, table_cols_info: &m
                             print!("{}: {}, ", col, t);
                         }
                         Some(MySQLValue::Decimal(t)) => {
-                            print!("{}: {:?}, ", col, t.to_f64().unwrap());
+                            print!("{}: {:?}, ", col, t.to_string());
                         }
                         Some(MySQLValue::Date {year, month, day }) => {
                             print!("{}: {}-{}-{}, ", col, year,month,day);

@@ -155,7 +155,6 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
         loop {
             let (mut buf,header) = socketio::get_packet_from_stream(conn);
             while header.payload == 0xffffff{
-                println!("{}",header.payload);
                 let (buf_tmp,_) = socketio::get_packet_from_stream(conn);
                 buf.extend(buf_tmp);
             }
@@ -167,6 +166,7 @@ fn unpack_text_packet(conn: &mut TcpStream) -> Result<Vec<HashMap<String,String>
             let values = unpack_text_value(&buf, &column_info);
             values_info.push(values);
         }
+
         Ok(values_info)
     }else {
         let _err = readvalue::read_string_value(&buf[3..]);
@@ -209,7 +209,6 @@ fn unpack_text_value(buf: &Vec<u8>,column_info: &Vec<MetaColumn>) -> HashMap<Str
             value = readvalue::read_string_value(&buf[offset..offset + var_len]);
             offset += var_len;
         }
-
 
         values_info.insert(cl_name,value);
     }

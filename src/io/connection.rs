@@ -52,6 +52,9 @@ pub fn create_mysql_conn(conf: &Config) -> Result<TcpStream, &'static str>{
     //检查服务端回包情况
     let (packet_buf,_) = socketio::get_packet_from_stream(&mut mysql_conn);
 
+    if packet_buf[0] == 0x00 {
+        return Ok(mysql_conn);
+    }
 
     let mut tmp_auth_data = vec![];
     if packet_buf[0] == 0xFE {

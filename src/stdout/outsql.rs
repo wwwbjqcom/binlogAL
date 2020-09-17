@@ -103,7 +103,7 @@ fn get_values_info(value: &Option<MySQLValue>, col_type: &String) -> String {
             value_str.push_str(&format!("{}",t));
         }
         Some(MySQLValue::Decimal(t)) => {
-            value_str.push_str(&format!("{}",t.to_f64().unwrap()));
+            value_str.push_str(&format!("{}",t.to_string()));
         }
         Some(MySQLValue::SignedInteger(t)) => {
             value_str.push_str(&format!("{}", t));
@@ -265,7 +265,7 @@ fn get_value_str(value: &Option<MySQLValue>,col: &String, col_type: &String, get
             where_str.push_str(&format!("{}={}",col, t));
         }
         Some(MySQLValue::Decimal(t)) => {
-            where_str.push_str(&format!("{}={}",col, t.to_f64().unwrap()));
+            where_str.push_str(&format!("{}={}",col, t.to_string()));
         }
         Some(MySQLValue::SignedInteger(t)) => {
             where_str.push_str(&format!("{}={}",col, t));

@@ -13,6 +13,7 @@ use bigdecimal::BigDecimal;
 use std::io::{Read, Cursor, Seek};
 use byteorder::{ReadBytesExt, BigEndian, LittleEndian};
 use std::io;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct DecimalMeta{
