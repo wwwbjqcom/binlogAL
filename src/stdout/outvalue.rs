@@ -74,7 +74,8 @@ pub fn out_static() {
 }
 
 fn print_row_value(row_values: &RowValue,code: &BinlogEvent, table_cols_info: &mut HashMap<String, Vec<HashMap<String, String>>>,db_tbl: &String) {
-    println!("ROW_VALUE");
+    // println!("ROW_VALUE");
+    print_row_value_for_type(code);
     match table_cols_info.get(db_tbl) {
         Some(t) => {
             let cols = t;
@@ -170,6 +171,21 @@ fn print_row_value(row_values: &RowValue,code: &BinlogEvent, table_cols_info: &m
         }
     }
 
+}
+
+fn print_row_value_for_type(code: &BinlogEvent) {
+    match code {
+        BinlogEvent::UpdateEvent => {
+            println!("ROW_VALUE for UPDATE");
+        }
+        BinlogEvent::DeleteEvent => {
+            println!("ROW_VALUE for DELETE");
+        }
+        BinlogEvent::WriteEvent => {
+            println!("ROW_VALUE for INSERT");
+        }
+        _ => {}
+    }
 }
 
 fn print_command(
