@@ -150,13 +150,14 @@ impl RowValue{
             let mut row: Vec<Option<MySQLValue>> = vec![];
             let columns = map.column_info.len();
             for idx in 0..columns {
-                //println!("{},{:?},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),header.event_length);
+                // println!("{},{:?},{},{}",idx,map.column_info[idx].column_type,buf.tell().unwrap(),header.event_length);
                 let value= if is_null(&null_bit.to_vec(), &idx) > 0{
                     MySQLValue::Null
                 } else {
-                    Self::parsevalue(buf, &map.column_info[idx].column_type, &map.column_info[idx].column_meta)
+                    Self::parsevalue(buf, &map.column_info[idx].column_type, &map.column_info[idx].column_meta, &header.event_length)
 
                 };
+                // println!("{:?}", &value);
                 row.push(Some(value));
             }
             rows.push(row);
@@ -172,14 +173,13 @@ impl RowValue{
                     }
                 }
             }
-
         };
         RowValue{
             rows
         }
     }
 
-    fn parsevalue<R: Read + Tell>(buf: &mut R, type_code: &ColumnTypeDict, col_meta: &Vec<usize>) -> MySQLValue{
+    fn parsevalue<R: Read + Tell>(buf: &mut R, type_code: &ColumnTypeDict, col_meta: &Vec<usize>, event_length: &u32) -> MySQLValue{
         match type_code {
             ColumnTypeDict::MysqlTypeTiny => {
                 MySQLValue::SignedInteger(buf.read_i8().unwrap() as i64)
@@ -291,8 +291,12 @@ impl RowValue{
             ColumnTypeDict::MysqlTypeMediumBlob |
             ColumnTypeDict::MysqlTypeBit => {
                 let var_length =  Self::read_str_value_length(buf, &col_meta[0]);
-                let mut pack = vec![0u8; var_length];
+                let mut pack = vec![0u8; var_length.clone()];
                 buf.read_exact(&mut pack).unwrap();
+                // buf.read_exact(&mut pack).map_or_else(|e|{
+                //     buf.seek(io::SeekFrom::End(0)).unwrap();
+                //     println!("tel:{}, event_length: {}, var_length: {}",buf.tell().unwrap(), &event_length, &var_length);
+                // },|f|{});
                 MySQLValue::Blob(pack)
             }
             ColumnTypeDict::MysqlTypeJson => {

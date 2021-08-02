@@ -187,7 +187,9 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
         }
 
         //判断position和datetime过滤情况
+        // println!("ccccQwq");
         let (grep_state,success )= grep_info.grep_pos_time(&mut rollback_trac, &event_header);
+        // println!("{},{}", &grep_state, &success);
         if success{
             break 'all;
         }else if !grep_state {
@@ -199,6 +201,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             rollback_trac.delete_cur_event();
             continue;
         };
+
         let mut data = Traction::Unknown;
         match event_header.type_code {
             readevent::BinlogEvent::GtidEvent => {
@@ -209,7 +212,6 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
                     rollback_trac.delete_cur_event();
                     continue 'all;
                 }
-
                 data = Traction::GtidEvent(v);
                 if !grep_info.save_in_gtid_tmp(&data){
                     rollback_trac.rollback_traction.extend(&rollback_trac.cur_event);
@@ -228,6 +230,10 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             },
             readevent::BinlogEvent::TableMapEvent => {
                 let v = readevent::TableMap::read_event( &event_header, &mut cur, version);
+                // let a = grep_info.check_grep_tbl(&v, &mut rollback_trac, conf, &mut table_cols_info, &db_tbl);
+                // if grep_info.grep_tbl.start{
+                //     println!("{:?}, {}, {}", &v, &a, &grep_info.grep_tbl.start);
+                // }
                 if !grep_info.check_grep_tbl(&v, &mut rollback_trac, conf, &mut table_cols_info, &db_tbl){
                     continue 'all;
                 }
@@ -239,6 +245,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             readevent::BinlogEvent::UpdateEvent |
             readevent::BinlogEvent::DeleteEvent |
             readevent::BinlogEvent::WriteEvent => {
+                println!("{}", &grep_info.grep_tbl.start);
                 if conf.rollback{
                     rollback_trac.rollback_traction.extend(rollback::rollback_row_event(&rollback_trac.cur_event, &event_header, &tabl_map));
 
