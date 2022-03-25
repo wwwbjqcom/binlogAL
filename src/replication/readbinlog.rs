@@ -245,7 +245,7 @@ pub fn readbinlog_fromfile(conf: &Config, version: &u8, reader: &mut BufReader<F
             readevent::BinlogEvent::UpdateEvent |
             readevent::BinlogEvent::DeleteEvent |
             readevent::BinlogEvent::WriteEvent => {
-                println!("{}", &grep_info.grep_tbl.start);
+                // println!("{}", &grep_info.grep_tbl.start);
                 if conf.rollback{
                     rollback_trac.rollback_traction.extend(rollback::rollback_row_event(&rollback_trac.cur_event, &event_header, &tabl_map));
 
